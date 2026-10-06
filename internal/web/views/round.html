@@ -100,6 +100,11 @@
     {{range .BallotView.Voters}}<li>{{if .Done}}✓{{else}}<span class="muted">…</span>{{end}} {{.Name}}</li>
     {{end}}
   </ul>
+  {{else if eq .Phase "review"}}
+  <p>Voting is closed. Results are coming soon.</p>
+  {{if $.Player}}{{if $.Player.IsAdmin}}
+  <p><a href="/c/{{$.Club.Slug}}/admin/rounds/{{.Month}}/review">Review results &amp; pick quotes</a></p>
+  {{end}}{{end}}
   {{end}}
 {{end}}
 {{end}}

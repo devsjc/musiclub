@@ -1,11 +1,100 @@
-{{ template "layout.html" . }}
-{{ define "content" }}
-<main class="container">
-    <h2>Review Round {{ .Round.Month }}</h2>
-    <p>Phase: {{ .Round.Phase }}</p>
+{{define "content"}}
+{{with .Data}}
+<h1>Review {{.Round.Month}}</h1>
+<p class="muted">Phase: {{.Round.Phase}}</p>
 
-    <form method="post" action="/c/{{ .Club.Slug }}/admin/rounds/{{ .Round.Month }}/publish">
-        <button type="submit">Publish</button>
+<h2>Category Winners & Votes</h2>
+<table class="compact">
+  <tr>
+    <th>Song</th>
+    <th>Favorite Votes</th>
+    <th>Best Fit Votes</th>
+    <th>Overall Votes</th>
+  </tr>
+  {{range .Submissions}}
+  {{$favCount := index $.Data.Tallies.FavoriteVotes .ID}}
+  {{$bestCount := index $.Data.Tallies.BestFitVotes .ID}}
+  {{$overallCount := index $.Data.Tallies.OverallVotes .ID}}
+  <tr>
+    <td>
+      <strong>{{.Artist}} — {{.Title}}</strong>
+      {{if index $.Data.WinningSubs .ID}} <span class="tag">winner</span>{{end}}
+    </td>
+    <td>{{$favCount}}</td>
+    <td>{{$bestCount}}</td>
+    <td>{{$overallCount}}</td>
+  </tr>
+  {{end}}
+</table>
+
+<h2>Featured Quotes</h2>
+{{if .FeaturedQuotes}}
+<ul class="plain">
+  {{range .FeaturedQuotes}}
+  <li>
+    <em>"{{.Quote}}"</em> ({{.Category}})
+    <form class="inline" method="post" action="/c/{{$.Club.Slug}}/admin/rounds/{{$.Data.Round.Month}}/quotes">
+      <input type="hidden" name="action" value="delete">
+      <input type="hidden" name="quote_id" value="{{.ID}}">
+      <button class="small">Remove</button>
     </form>
-</main>
-{{ end }}
+  </li>
+  {{end}}
+</ul>
+{{else}}
+<p class="muted">No featured quotes yet.</p>
+{{end}}
+
+{{if .CandidateQuotes}}
+<h3>Candidate Comments</h3>
+<p class="muted">Comments left by voters on winning songs:</p>
+<ul class="plain">
+  {{range .CandidateQuotes}}
+  <li>
+    <p><strong>{{.SongTitle}}</strong> ({{.Category}})</p>
+    <blockquote>{{.Comment}}</blockquote>
+    <form method="post" action="/c/{{$.Club.Slug}}/admin/rounds/{{$.Data.Round.Month}}/quotes">
+      <input type="hidden" name="submission_id" value="{{.SubmissionID}}">
+      <input type="hidden" name="category" value="{{.Category}}">
+      <input type="hidden" name="ballot_id" value="{{.BallotID}}">
+      <input type="hidden" name="quote" value="{{.Comment}}">
+      <button class="small">Feature this quote</button>
+    </form>
+  </li>
+  {{end}}
+</ul>
+{{end}}
+
+<h2>Song Keys (Duplicate Detection)</h2>
+<p class="muted">If two songs are the same, give them the same song key.</p>
+<table class="compact">
+  <tr><th>Artist — Title</th><th>Song Key</th><th></th></tr>
+  {{range .Submissions}}
+  <tr>
+    <td>{{.Artist}} — {{.Title}}</td>
+    <td>
+      <form class="inline" method="post" action="/c/{{$.Club.Slug}}/admin/rounds/{{$.Data.Round.Month}}/song-keys">
+        <input type="hidden" name="submission_id" value="{{.ID}}">
+        <input type="text" name="song_key" value="{{.SongKey}}" required>
+        <button class="small">Save</button>
+      </form>
+    </td>
+  </tr>
+  {{end}}
+</table>
+
+<h2>Publish</h2>
+{{if eq .Round.Phase "review"}}
+<form method="post" action="/c/{{$.Club.Slug}}/admin/rounds/{{.Round.Month}}/publish">
+  <p><label><input type="checkbox" name="confirm_uncurated" value="1"> Publish anyway (even if quotes aren't chosen)</label></p>
+  <button>Publish Round</button>
+</form>
+{{else if eq .Round.Phase "closed"}}
+<p class="muted">This round is closed.</p>
+<form method="post" action="/c/{{$.Club.Slug}}/admin/rounds/{{.Round.Month}}/recompute">
+  <button>Recompute Scores</button>
+</form>
+{{end}}
+
+{{end}}
+{{end}}

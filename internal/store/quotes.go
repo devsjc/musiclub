@@ -46,6 +46,23 @@ func (q *Quotes) Set(ctx context.Context, clubID, roundID int64, quotes []domain
 	return tx.Commit()
 }
 
+// Add inserts a featured quote.
+func (q *Quotes) Add(ctx context.Context, clubID, roundID int64, quote domain.FeaturedQuote) error {
+	_, err := q.db.ExecContext(ctx,
+		`INSERT INTO featured_quotes (round_id, category, submission_id, ballot_id, quote)
+		 VALUES (?, ?, ?, ?, ?)`,
+		roundID, quote.Category, quote.SubmissionID, quote.BallotID, quote.Quote)
+	return err
+}
+
+// Delete removes a featured quote.
+func (q *Quotes) Delete(ctx context.Context, clubID, roundID, quoteID int64) error {
+	_, err := q.db.ExecContext(ctx,
+		`DELETE FROM featured_quotes WHERE id = ? AND round_id = ?`,
+		quoteID, roundID)
+	return err
+}
+
 func (q *Quotes) List(ctx context.Context, clubID, roundID int64) ([]domain.FeaturedQuote, error) {
 	rows, err := q.db.QueryContext(ctx,
 		`SELECT q.id, q.round_id, q.category, q.submission_id, q.ballot_id, q.quote, q.position
