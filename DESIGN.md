@@ -516,7 +516,7 @@ Club creation is deliberately **not** a web route for now: use the CLI (`musiccl
 
 ### 8.4 Current Player and Admin Without Auth
 
-For now: `/c/{club}/whoami` shows a list of the club's players; choosing one stores their `player_id` in a signed cookie (one cookie per club, e.g. `mc_{slug}`). A middleware reads it and puts the `Player` on the context. Admin routes additionally require `player.is_admin`. This is a convenience, not security. Anyone can pick anyone. It does give a clean seam: when real auth is added later, only this middleware changes.
+For now: `/c/{club}/whoami` shows a list of the club's players; choosing one stores their `player_id` in a signed cookie (one cookie per club, e.g. `mc_{slug}`). A middleware reads it and puts the `Player` on the context. Admin routes additionally require `player.is_admin`. Because the first admin can't be created through the web UI, `musicclub player add --club SLUG --name NAME [--admin]` bootstraps players from the CLI; the admin page refuses to retire or demote a club's last active admin. This is a convenience, not security. Anyone can pick anyone. It does give a clean seam: when real auth is added later, only this middleware changes.
 
 ## 9. Statistics
 

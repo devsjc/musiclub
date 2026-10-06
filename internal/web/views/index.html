@@ -1,0 +1,10 @@
+{{define "content"}}
+<h1>Music Club</h1>
+{{if .Data}}
+<ul class="plain">
+{{range .Data}}<li><a href="/c/{{.Slug}}">{{.Name}}</a></li>
+{{end}}</ul>
+{{else}}
+<p class="muted">No clubs yet. Create one with <code>musicclub club add</code>.</p>
+{{end}}
+{{end}}

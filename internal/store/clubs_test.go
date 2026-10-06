@@ -21,11 +21,11 @@ func newClubs(t *testing.T) *Clubs {
 func TestClubsCreateAndLookup(t *testing.T) {
 	s, ctx := newClubs(t), context.Background()
 
-	c, err := s.Create(ctx, "friday-friends", "  Friday Friends ")
+	c, err := s.Create(ctx, "friday-friends", "  Friday FRIENDS ")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.Name != "Friday Friends" || c.SubmissionDays != 14 || c.VotingDays != 14 {
+	if c.Name != "friday friends" || c.SubmissionDays != 14 || c.VotingDays != 14 {
 		t.Fatalf("unexpected club: %+v", c)
 	}
 

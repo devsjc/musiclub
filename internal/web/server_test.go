@@ -14,7 +14,7 @@ func TestHealthz(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer d.Close()
-	h := NewServer(d).Handler()
+	h := NewServer(d, "test-secret").Handler()
 
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest("GET", "/healthz", nil))

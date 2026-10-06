@@ -2,6 +2,8 @@
 //
 //	musicclub                                    run the server
 //	musicclub club add --slug S --name N         create a club
+//	musicclub player add --club S --name N [--admin]
+//	                                             add a player (the first admin has to come from here)
 //	musicclub healthcheck                        GET /healthz (for Docker HEALTHCHECK)
 package main
 
@@ -48,8 +50,13 @@ func run(args []string) error {
 			return clubAdd(cfg, args[2:])
 		}
 		return errors.New("usage: musicclub club add --slug SLUG --name NAME")
+	case "player":
+		if len(args) >= 2 && args[1] == "add" {
+			return playerAdd(cfg, args[2:])
+		}
+		return errors.New("usage: musicclub player add --club SLUG --name NAME [--admin]")
 	default:
-		return fmt.Errorf("unknown command %q (try: club add, healthcheck)", args[0])
+		return fmt.Errorf("unknown command %q (try: club add, player add, healthcheck)", args[0])
 	}
 }
 
@@ -65,7 +72,7 @@ func serve(cfg config.Config) error {
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           web.NewServer(database).Handler(),
+		Handler:           web.NewServer(database, cfg.CookieSecret).Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
@@ -106,6 +113,34 @@ func clubAdd(cfg config.Config, args []string) error {
 		return err
 	}
 	fmt.Printf("created club %q at /c/%s\n", club.Name, club.Slug)
+	return nil
+}
+
+func playerAdd(cfg config.Config, args []string) error {
+	fs := flag.NewFlagSet("player add", flag.ContinueOnError)
+	slug := fs.String("club", "", "slug of the club to add the player to")
+	name := fs.String("name", "", "player name")
+	admin := fs.Bool("admin", false, "make the player an admin")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	database, err := db.Open(cfg.DBPath)
+	if err != nil {
+		return err
+	}
+	defer database.Close()
+
+	ctx := context.Background()
+	club, err := store.NewClubs(database).BySlug(ctx, *slug)
+	if err != nil {
+		return fmt.Errorf("club %q: %w", *slug, err)
+	}
+	p, err := store.NewPlayers(database).Create(ctx, club.ID, *name, *admin)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("added %q to %q (admin: %t)\n", p.Name, club.Name, p.IsAdmin)
 	return nil
 }
 

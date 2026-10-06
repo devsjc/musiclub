@@ -24,9 +24,10 @@ type Clubs struct{ db *sql.DB }
 
 func NewClubs(db *sql.DB) *Clubs { return &Clubs{db: db} }
 
-// Create inserts a new club with the default window lengths.
+// Create inserts a new club with the default window lengths. The name is
+// stored in lower case.
 func (s *Clubs) Create(ctx context.Context, slug, name string) (domain.Club, error) {
-	name = strings.TrimSpace(name)
+	name = strings.ToLower(strings.TrimSpace(name))
 	if !slugPattern.MatchString(slug) {
 		return domain.Club{}, ErrInvalidSlug
 	}

@@ -1,0 +1,13 @@
+{{define "content"}}
+<h1>Who are you?</h1>
+{{if .Data}}
+<form method="post" action="/c/{{.Club.Slug}}/whoami">
+  <ul class="plain">
+  {{range .Data}}<li><button name="player_id" value="{{.ID}}">{{.Name}}</button></li>
+  {{end}}</ul>
+</form>
+<p class="muted">This just remembers your choice on this device; it isn't a login.</p>
+{{else}}
+<p class="muted">This club has no players yet. Ask an admin to add some.</p>
+{{end}}
+{{end}}

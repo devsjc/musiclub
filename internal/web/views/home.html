@@ -1,0 +1,9 @@
+{{define "content"}}
+<h1>{{.Club.Name}}</h1>
+{{if .Player}}
+<p>Hi {{.Player.Name}}.</p>
+{{else}}
+<p><a href="/c/{{.Club.Slug}}/whoami">Tell us who you are</a> to take part.</p>
+{{end}}
+<p class="muted">No round in progress.</p>
+{{end}}

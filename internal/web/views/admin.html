@@ -1,0 +1,32 @@
+{{define "content"}}
+<h1>Admin</h1>
+<h2>Players</h2>
+<table>
+  <tr><th>Name</th><th>Status</th><th></th></tr>
+  {{range .Data}}
+  <tr>
+    <td>{{.Name}}</td>
+    <td>{{if .Active}}active{{else}}<span class="muted">retired</span>{{end}}{{if .IsAdmin}} <span class="tag">admin</span>{{end}}</td>
+    <td>
+      <form class="inline" method="post" action="/c/{{$.Club.Slug}}/admin/players">
+        <input type="hidden" name="player_id" value="{{.ID}}">
+        {{if .Active}}<button name="action" value="deactivate">Retire</button>
+        {{else}}<button name="action" value="activate">Reinstate</button>{{end}}
+        {{if .IsAdmin}}<button name="action" value="revoke_admin">Remove admin</button>
+        {{else}}<button name="action" value="grant_admin">Make admin</button>{{end}}
+      </form>
+    </td>
+  </tr>
+  {{else}}
+  <tr><td colspan="3" class="muted">No players yet.</td></tr>
+  {{end}}
+</table>
+
+<h2>Add a player</h2>
+<form method="post" action="/c/{{.Club.Slug}}/admin/players">
+  <input type="hidden" name="action" value="add">
+  <input type="text" name="name" placeholder="Name" maxlength="50" required>
+  <label><input type="checkbox" name="is_admin" value="1"> admin</label>
+  <button>Add</button>
+</form>
+{{end}}

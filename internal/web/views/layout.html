@@ -1,0 +1,23 @@
+{{define "layout"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}} · Music Club</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  {{if .Club}}<a class="brand" href="/c/{{.Club.Slug}}">{{.Club.Name}}</a>
+  <span>
+    {{if .Player}}{{.Player.Name}}{{if .Player.IsAdmin}} · <a href="/c/{{.Club.Slug}}/admin">Admin</a>{{end}} · <a href="/c/{{.Club.Slug}}/whoami">Not you?</a>
+    {{else}}<a href="/c/{{.Club.Slug}}/whoami">Who are you?</a>{{end}}
+  </span>
+  {{else}}<a class="brand" href="/">Music Club</a>{{end}}
+</header>
+<main>
+{{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+{{template "content" .}}
+</main>
+</body>
+</html>{{end}}

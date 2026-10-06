@@ -1,0 +1,17 @@
+:root { --fg: #1c1c1e; --muted: #6b6b70; --line: #e2e2e6; --accent: #5b3fd1; --bad: #b3261e; }
+* { box-sizing: border-box; }
+body { margin: 0; font: 16px/1.5 system-ui, sans-serif; color: var(--fg); }
+header, main { max-width: 42rem; margin: 0 auto; padding: 1rem; }
+header { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid var(--line); }
+header a.brand { font-weight: 700; text-decoration: none; color: inherit; }
+a { color: var(--accent); }
+.muted { color: var(--muted); }
+.error { color: var(--bad); font-weight: 600; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: .4rem .5rem; border-bottom: 1px solid var(--line); vertical-align: middle; }
+form.inline { display: inline; }
+input[type=text] { padding: .35rem .5rem; font: inherit; }
+button { padding: .3rem .7rem; font: inherit; cursor: pointer; }
+ul.plain { list-style: none; padding: 0; }
+ul.plain li { margin: .5rem 0; }
+.tag { font-size: .75rem; padding: .05rem .4rem; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); }
