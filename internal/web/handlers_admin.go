@@ -4,7 +4,11 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
+	"time"
 
+	"musiclub/internal/domain"
+	"musiclub/internal/rounds"
 	"musiclub/internal/store"
 )
 
@@ -12,13 +16,73 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 	s.renderAdmin(w, r, http.StatusOK, "")
 }
 
+type adminView struct {
+	Players      []domain.Player
+	Round        *roundView // the round in progress, if any
+	DefaultMonth string     // pre-filled in the "start a round" form
+}
+
 func (s *Server) renderAdmin(w http.ResponseWriter, r *http.Request, status int, msg string) {
-	players, err := s.players.List(r.Context(), clubFrom(r.Context()).ID)
+	ctx := r.Context()
+	club := clubFrom(ctx)
+	players, err := s.players.List(ctx, club.ID)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
 	}
-	s.render(w, r, status, "admin", page{Title: "Admin", Error: msg, Data: players})
+	view := adminView{Players: players, DefaultMonth: time.Now().In(s.loc).Format("2006-01")}
+
+	round, err := s.rounds.Current(ctx, club.ID)
+	switch {
+	case err == nil:
+		v, err := s.roundView(ctx, round)
+		if err != nil {
+			s.serverError(w, r, err)
+			return
+		}
+		view.Round = &v
+	case !errors.Is(err, store.ErrNotFound):
+		s.serverError(w, r, err)
+		return
+	}
+	s.render(w, r, status, "admin", page{Title: "Admin", Error: msg, Data: view})
+}
+
+// handleAdminStartRound kicks off the round for a month; a picker is chosen at random.
+func (s *Server) handleAdminStartRound(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	_, err := s.roundSvc.StartRound(ctx, clubFrom(ctx).ID, strings.TrimSpace(r.FormValue("month")))
+	switch {
+	case err == nil:
+		http.Redirect(w, r, clubPath(ctx, "/admin"), http.StatusSeeOther)
+	case errors.Is(err, rounds.ErrInvalidMonth),
+		errors.Is(err, store.ErrMonthTaken),
+		errors.Is(err, store.ErrRoundOpen),
+		errors.Is(err, store.ErrNoPlayers):
+		s.renderAdmin(w, r, http.StatusUnprocessableEntity, err.Error())
+	default:
+		s.serverError(w, r, err)
+	}
+}
+
+// handleAdminReroll picks a different theme picker while the theme is still pending.
+func (s *Server) handleAdminReroll(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	round, ok := s.roundByMonth(w, r)
+	if !ok {
+		return
+	}
+	_, err := s.roundSvc.RerollPicker(ctx, round.ClubID, round.ID)
+	switch {
+	case err == nil:
+		http.Redirect(w, r, clubPath(ctx, "/admin"), http.StatusSeeOther)
+	case errors.Is(err, store.ErrWrongPhase):
+		s.renderAdmin(w, r, http.StatusConflict, "The theme has already been set, so the picker can't be re-rolled.")
+	case errors.Is(err, store.ErrNoOtherPicker):
+		s.renderAdmin(w, r, http.StatusUnprocessableEntity, err.Error())
+	default:
+		s.serverError(w, r, err)
+	}
 }
 
 // handleAdminPlayers is the single endpoint for player management; the form's

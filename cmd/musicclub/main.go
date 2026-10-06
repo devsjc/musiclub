@@ -72,7 +72,7 @@ func serve(cfg config.Config) error {
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           web.NewServer(database, cfg.CookieSecret).Handler(),
+		Handler:           web.NewServer(database, cfg.CookieSecret, cfg.Location).Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 

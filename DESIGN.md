@@ -80,6 +80,8 @@ A **Round** belongs to one club and moves through a linear state machine:
 | `review` | Admin only | Voting is over. Admin sees tallies, fixes any wrongly detected duplicates, and picks favourite quotes for the winning songs. Players see "results coming soon". |
 | `closed` | Nobody | Admin presses **Publish**. Scores are written once; results and stats are visible to everyone. |
 
+A club has at most one round that isn't `closed` at a time; starting another is refused until it is published.
+
 Transitions:
 - Admin starts round → `theme_pending` (round row created, picker chosen).
 - Picker submits theme → `submitting` (deadline = now + `submission_days`).

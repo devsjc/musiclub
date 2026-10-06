@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"musiclub/internal/db"
 	"musiclub/internal/domain"
@@ -19,6 +20,7 @@ type env struct {
 	h       http.Handler
 	clubs   *store.Clubs
 	players *store.Players
+	rounds  *store.Rounds
 }
 
 func newEnv(t *testing.T) *env {
@@ -28,7 +30,7 @@ func newEnv(t *testing.T) *env {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { d.Close() })
-	return &env{t: t, h: NewServer(d, "test-secret").Handler(), clubs: store.NewClubs(d), players: store.NewPlayers(d)}
+	return &env{t: t, h: NewServer(d, "test-secret", time.UTC).Handler(), clubs: store.NewClubs(d), players: store.NewPlayers(d), rounds: store.NewRounds(d)}
 }
 
 func (e *env) club(slug string) domain.Club {
@@ -334,4 +336,108 @@ func TestStaticCSS(t *testing.T) {
 	e := newEnv(t)
 	rec := e.do("GET", "/static/style.css", nil, domain.Club{}, nil)
 	wantStatus(t, rec, 200)
+}
+
+func TestRoundKickoffAndTheme(t *testing.T) {
+	e := newEnv(t)
+	c := e.club("friends")
+	admin := e.player(c, "Admin", true)
+	sam := e.player(c, "Sam", false)
+
+	start := func(as *domain.Player, month string) *httptest.ResponseRecorder {
+		return e.do("POST", "/c/friends/admin/rounds", as, c, url.Values{"month": {month}})
+	}
+
+	// Only admins can start rounds, and the month has to be valid.
+	wantStatus(t, start(&sam, "2026-03"), 403)
+	wantStatus(t, start(nil, "2026-03"), http.StatusSeeOther)
+	wantStatus(t, start(&admin, "March"), http.StatusUnprocessableEntity)
+	wantStatus(t, e.do("GET", "/c/friends/rounds/2026-03", &sam, c, nil), 404)
+
+	wantStatus(t, start(&admin, "2026-03"), http.StatusSeeOther)
+	rec := start(&admin, "2026-04")
+	wantStatus(t, rec, http.StatusUnprocessableEntity)
+	if !strings.Contains(rec.Body.String(), "already has a round in progress") {
+		t.Fatalf("open-round message missing:\n%s", rec.Body)
+	}
+
+	// Both players are in the first cycle's pool, so either may be picker; find out who.
+	round, err := e.rounds.ByMonth(context.Background(), c.ID, "2026-03")
+	if err != nil {
+		t.Fatal(err)
+	}
+	picker, other := admin, sam
+	if round.PickerID == sam.ID {
+		picker, other = sam, admin
+	}
+
+	rec = e.do("GET", "/c/friends/rounds/2026-03", &other, c, nil)
+	wantStatus(t, rec, 200)
+	body := rec.Body.String()
+	if !strings.Contains(body, "Waiting on <strong>"+picker.Name+"</strong>") || strings.Contains(body, `name="theme"`) {
+		t.Fatalf("non-picker should see a waiting message and no form:\n%s", body)
+	}
+	rec = e.do("GET", "/c/friends/rounds/2026-03", &picker, c, nil)
+	if !strings.Contains(rec.Body.String(), `name="theme"`) {
+		t.Fatalf("picker should see the theme form:\n%s", rec.Body)
+	}
+	if rec = e.do("GET", "/c/friends", &other, c, nil); !strings.Contains(rec.Body.String(), "waiting on "+picker.Name) {
+		t.Fatalf("home should show the pending round:\n%s", rec.Body)
+	}
+
+	if rec = e.do("GET", "/c/friends", &picker, c, nil); !strings.Contains(rec.Body.String(), "your turn to pick the theme") {
+		t.Fatalf("home should prompt the picker:\n%s", rec.Body)
+	}
+
+	// Theme rules: logged in, the picker, non-empty.
+	theme := func(as *domain.Player, th string) *httptest.ResponseRecorder {
+		return e.do("POST", "/c/friends/rounds/2026-03/theme", as, c, url.Values{"theme": {th}, "description": {"wet"}})
+	}
+	wantStatus(t, theme(nil, "Rain"), http.StatusSeeOther)
+	wantStatus(t, theme(&other, "Rain"), 403)
+	wantStatus(t, theme(&picker, "  "), http.StatusUnprocessableEntity)
+	if r, _ := e.rounds.ByMonth(context.Background(), c.ID, "2026-03"); r.Phase != domain.PhaseThemePending {
+		t.Fatalf("rejected theme changed the round: %+v", r)
+	}
+	wantStatus(t, theme(&picker, "Rain"), http.StatusSeeOther)
+	wantStatus(t, theme(&picker, "Sun"), http.StatusConflict)
+
+	rec = e.do("GET", "/c/friends/rounds/2026-03", &other, c, nil)
+	if body := rec.Body.String(); !strings.Contains(body, "Rain") || !strings.Contains(body, "Submissions open until") {
+		t.Fatalf("submitting page should show theme and deadline:\n%s", body)
+	}
+	// Re-roll is no longer possible once the theme is set.
+	wantStatus(t, e.do("POST", "/c/friends/admin/rounds/2026-03/reroll", &admin, c, url.Values{}), http.StatusConflict)
+}
+
+func TestAdminReroll(t *testing.T) {
+	e := newEnv(t)
+	c := e.club("friends")
+	admin := e.player(c, "Admin", true)
+	sam := e.player(c, "Sam", false)
+
+	wantStatus(t, e.do("POST", "/c/friends/admin/rounds", &admin, c, url.Values{"month": {"2026-03"}}), http.StatusSeeOther)
+	before, _ := e.rounds.ByMonth(context.Background(), c.ID, "2026-03")
+
+	wantStatus(t, e.do("POST", "/c/friends/admin/rounds/2026-03/reroll", &sam, c, url.Values{}), 403)
+	wantStatus(t, e.do("POST", "/c/friends/admin/rounds/2026-09/reroll", &admin, c, url.Values{}), 404)
+	wantStatus(t, e.do("POST", "/c/friends/admin/rounds/2026-03/reroll", &admin, c, url.Values{}), http.StatusSeeOther)
+	after, _ := e.rounds.ByMonth(context.Background(), c.ID, "2026-03")
+	if after.PickerID == before.PickerID {
+		t.Fatalf("picker unchanged after re-roll: %d", after.PickerID)
+	}
+}
+
+func TestRoundsAreClubScopedOnTheWeb(t *testing.T) {
+	e := newEnv(t)
+	a, b := e.club("a"), e.club("b")
+	adminA := e.player(a, "Alice", true)
+	e.player(b, "Bob", true)
+
+	wantStatus(t, e.do("POST", "/c/a/admin/rounds", &adminA, a, url.Values{"month": {"2026-03"}}), http.StatusSeeOther)
+	wantStatus(t, e.do("GET", "/c/a/rounds/2026-03", &adminA, a, nil), 200)
+	wantStatus(t, e.do("GET", "/c/b/rounds/2026-03", nil, b, nil), 404)
+	if rec := e.do("GET", "/c/b", nil, b, nil); !strings.Contains(rec.Body.String(), "No round in progress") {
+		t.Fatalf("club b home shows club a's round:\n%s", rec.Body)
+	}
 }

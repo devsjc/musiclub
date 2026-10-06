@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"musiclub/internal/db"
 )
@@ -14,7 +15,7 @@ func TestHealthz(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer d.Close()
-	h := NewServer(d, "test-secret").Handler()
+	h := NewServer(d, "test-secret", time.UTC).Handler()
 
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest("GET", "/healthz", nil))

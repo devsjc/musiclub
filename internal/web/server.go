@@ -5,7 +5,9 @@ import (
 	"database/sql"
 	"html/template"
 	"net/http"
+	"time"
 
+	"musiclub/internal/rounds"
 	"musiclub/internal/store"
 	"musiclub/static"
 )
@@ -14,16 +16,22 @@ type Server struct {
 	db       *sql.DB
 	clubs    *store.Clubs
 	players  *store.Players
+	rounds   *store.Rounds
+	roundSvc *rounds.Service
+	loc      *time.Location // zone for showing deadlines and choosing the default month
 	sessions sessions
 	views    map[string]*template.Template
 	mux      *http.ServeMux
 }
 
-func NewServer(db *sql.DB, cookieSecret string) *Server {
+func NewServer(db *sql.DB, cookieSecret string, loc *time.Location) *Server {
 	s := &Server{
 		db:       db,
 		clubs:    store.NewClubs(db),
 		players:  store.NewPlayers(db),
+		rounds:   store.NewRounds(db),
+		roundSvc: rounds.New(db),
+		loc:      loc,
 		sessions: sessions{secret: []byte(cookieSecret)},
 		views:    parseViews(),
 		mux:      http.NewServeMux(),
@@ -37,8 +45,13 @@ func NewServer(db *sql.DB, cookieSecret string) *Server {
 	s.mux.Handle("GET /c/{club}/whoami", s.clubRoute(s.handleWhoami))
 	s.mux.Handle("POST /c/{club}/whoami", s.clubRoute(s.handleSetWhoami))
 
+	s.mux.Handle("GET /c/{club}/rounds/{month}", s.clubRoute(s.handleRound))
+	s.mux.Handle("POST /c/{club}/rounds/{month}/theme", s.clubRoute(s.handleSetTheme))
+
 	s.mux.Handle("GET /c/{club}/admin", s.adminRoute(s.handleAdmin))
 	s.mux.Handle("POST /c/{club}/admin/players", s.adminRoute(s.handleAdminPlayers))
+	s.mux.Handle("POST /c/{club}/admin/rounds", s.adminRoute(s.handleAdminStartRound))
+	s.mux.Handle("POST /c/{club}/admin/rounds/{month}/reroll", s.adminRoute(s.handleAdminReroll))
 	return s
 }
 

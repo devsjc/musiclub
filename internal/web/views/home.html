@@ -5,5 +5,11 @@
 {{else}}
 <p><a href="/c/{{.Club.Slug}}/whoami">Tell us who you are</a> to take part.</p>
 {{end}}
+{{with .Data}}
+<p><a href="/c/{{$.Club.Slug}}/rounds/{{.Month}}">{{.Month}} round</a>:
+{{if eq .Phase "theme_pending"}}{{if .ViewerIsPicker}}it's your turn to pick the theme.{{else}}waiting on {{.Picker.Name}} to pick a theme.{{end}}
+{{else}}{{.Theme}}{{end}}</p>
+{{else}}
 <p class="muted">No round in progress.</p>
+{{end}}
 {{end}}

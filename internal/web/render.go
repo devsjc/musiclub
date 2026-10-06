@@ -25,7 +25,7 @@ type page struct {
 // parseViews builds one template set per page (layout + page), so each page can
 // define its own "content" block.
 func parseViews() map[string]*template.Template {
-	names := []string{"index", "home", "whoami", "admin", "error"}
+	names := []string{"index", "home", "whoami", "admin", "round", "error"}
 	out := make(map[string]*template.Template, len(names))
 	for _, n := range names {
 		out[n] = template.Must(template.ParseFS(viewsFS, "views/layout.html", "views/"+n+".html"))
