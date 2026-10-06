@@ -170,6 +170,24 @@ func (s *Submissions) Submitters(ctx context.Context, clubID, roundID int64) (ma
 	return out, rows.Err()
 }
 
+func (s *Submissions) SetSongKey(ctx context.Context, clubID, roundID, submissionID int64, key string) error {
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE submissions SET song_key = ?
+		 WHERE id = ? AND round_id IN (SELECT id FROM rounds WHERE id = ? AND club_id = ?)`,
+		key, submissionID, roundID, clubID)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func scanSubmission(row interface{ Scan(...any) error }) (domain.Submission, error) {
 	var sub domain.Submission
 	var at string

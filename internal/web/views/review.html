@@ -1,0 +1,11 @@
+{{ template "layout.html" . }}
+{{ define "content" }}
+<main class="container">
+    <h2>Review Round {{ .Round.Month }}</h2>
+    <p>Phase: {{ .Round.Phase }}</p>
+
+    <form method="post" action="/c/{{ .Club.Slug }}/admin/rounds/{{ .Round.Month }}/publish">
+        <button type="submit">Publish</button>
+    </form>
+</main>
+{{ end }}

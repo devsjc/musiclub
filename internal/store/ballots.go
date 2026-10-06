@@ -113,6 +113,58 @@ func (s *Ballots) ByVoter(ctx context.Context, clubID, roundID, voterID int64) (
 	return b, rows.Err()
 }
 
+// List returns all ballots for a round.
+func (s *Ballots) List(ctx context.Context, clubID, roundID int64) ([]domain.Ballot, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT b.id, b.round_id, b.voter_id, b.favorite_submission_id, coalesce(b.favorite_comment, ''), b.best_fit_submission_id, coalesce(b.best_fit_comment, ''), b.submitted_at
+		FROM ballots b
+		JOIN rounds r ON r.id = b.round_id
+		WHERE r.club_id = ? AND b.round_id = ?
+	`, clubID, roundID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ballots []domain.Ballot
+	for rows.Next() {
+		var b domain.Ballot
+		var at string
+		if err := rows.Scan(&b.ID, &b.RoundID, &b.VoterID, &b.FavoriteSubmissionID, &b.FavoriteComment, &b.BestFitSubmissionID, &b.BestFitComment, &at); err != nil {
+			return nil, err
+		}
+		if b.SubmittedAt, err = parseTime(at); err != nil {
+			return nil, err
+		}
+		ballots = append(ballots, b)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	for i := range ballots {
+		gRows, err := s.db.QueryContext(ctx, `SELECT submission_id, guessed_player_id FROM guesses WHERE ballot_id = ?`, ballots[i].ID)
+		if err != nil {
+			return nil, err
+		}
+		for gRows.Next() {
+			var g domain.Guess
+			if err := gRows.Scan(&g.SubmissionID, &g.GuessedPlayerID); err != nil {
+				gRows.Close()
+				return nil, err
+			}
+			ballots[i].Guesses = append(ballots[i].Guesses, g)
+		}
+		if err := gRows.Err(); err != nil {
+			gRows.Close()
+			return nil, err
+		}
+		gRows.Close()
+	}
+
+	return ballots, nil
+}
+
 // Voters returns the set of player IDs who have cast a ballot in the round.
 func (s *Ballots) Voters(ctx context.Context, clubID, roundID int64) (map[int64]bool, error) {
 	rows, err := s.db.QueryContext(ctx,
