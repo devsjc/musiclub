@@ -1,0 +1,47 @@
+{{define "content"}}
+{{with .Data}}
+<h1>{{.Month}}</h1>
+{{if eq .Phase "theme_pending"}}
+  {{if .ViewerIsPicker}}
+  <p>You're picking the theme this month.</p>
+  <form method="post" action="/c/{{$.Club.Slug}}/rounds/{{.Month}}/theme">
+    <p><input type="text" name="theme" placeholder="Theme" maxlength="100" required></p>
+    <p><textarea name="description" placeholder="Description (optional)" maxlength="500" rows="3"></textarea></p>
+    <button>Set theme</button>
+  </form>
+  {{else}}
+  <p>Waiting on <strong>{{.Picker.Name}}</strong> to pick a theme.</p>
+  {{end}}
+{{else}}
+  <h2>{{.Theme}}</h2>
+  {{if .ThemeDescription}}<p>{{.ThemeDescription}}</p>{{end}}
+  <p class="muted">Picked by {{.Picker.Name}}.</p>
+  {{if eq .Phase "submitting"}}
+  {{if .SubmitOpen}}<p>Submissions open until {{.SubmissionsDue}}.</p>{{else}}<p>Submissions closed at {{.SubmissionsDue}}.</p>{{end}}
+  {{if $.Player}}
+    <h2>Your song</h2>
+    {{if and .SubmitOpen (not .Form.Saved)}}
+    <form method="post" action="/c/{{$.Club.Slug}}/rounds/{{.Month}}/submission">
+      <p><input type="text" name="artist" placeholder="Artist" value="{{.Form.Artist}}" maxlength="200" required></p>
+      <p><input type="text" name="title" placeholder="Title" value="{{.Form.Title}}" maxlength="200" required></p>
+      <p><input type="url" name="url" placeholder="Link to listen (Spotify, YouTube, Bandcamp, ...)" value="{{.Form.URL}}" maxlength="2000" required></p>
+      <p><textarea name="note" placeholder="Note (optional)" maxlength="500" rows="2">{{.Form.Note}}</textarea></p>
+      <button>Submit song</button>
+    </form>
+    {{else if .Form.Saved}}
+    <p>{{.Form.Artist}} — {{.Form.Title}}</p>
+    {{else}}
+    <p class="muted">You didn't submit a song.</p>
+    {{end}}
+  {{else}}
+    <p><a href="/c/{{$.Club.Slug}}/whoami">Tell us who you are</a> to submit a song.</p>
+  {{end}}
+  <h2>Who has submitted</h2>
+  <ul class="plain">
+    {{range .Submitters}}<li>{{if .Done}}✓{{else}}<span class="muted">…</span>{{end}} {{.Name}}</li>
+    {{end}}
+  </ul>
+  {{end}}
+{{end}}
+{{end}}
+{{end}}

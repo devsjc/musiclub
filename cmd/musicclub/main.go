@@ -22,6 +22,8 @@ import (
 
 	"musiclub/internal/config"
 	"musiclub/internal/db"
+	"musiclub/internal/rounds"
+	"musiclub/internal/scheduler"
 	"musiclub/internal/store"
 	"musiclub/internal/web"
 )
@@ -78,6 +80,9 @@ func serve(cfg config.Config) error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	svc := rounds.New(database)
+	go scheduler.Run(ctx, svc, 10*time.Minute)
 
 	errc := make(chan error, 1)
 	go func() { errc <- srv.ListenAndServe() }()

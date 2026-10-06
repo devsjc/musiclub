@@ -19,12 +19,13 @@ import (
 )
 
 type env struct {
-	t       *testing.T
-	db      *sql.DB
-	h       http.Handler
-	clubs   *store.Clubs
-	players *store.Players
-	rounds  *store.Rounds
+	t           *testing.T
+	db          *sql.DB
+	h           http.Handler
+	clubs       *store.Clubs
+	players     *store.Players
+	rounds      *store.Rounds
+	submissions *store.Submissions
 }
 
 func newEnv(t *testing.T) *env {
@@ -32,7 +33,15 @@ func newEnv(t *testing.T) *env {
 	d, err := db.Open(":memory:")
 	require.NoError(t, err)
 	t.Cleanup(func() { d.Close() })
-	return &env{t: t, db: d, h: NewServer(d, "test-secret", time.UTC).Handler(), clubs: store.NewClubs(d), players: store.NewPlayers(d), rounds: store.NewRounds(d)}
+	return &env{
+		t:           t,
+		db:          d,
+		h:           NewServer(d, "test-secret", time.UTC).Handler(),
+		clubs:       store.NewClubs(d),
+		players:     store.NewPlayers(d),
+		rounds:      store.NewRounds(d),
+		submissions: store.NewSubmissions(d),
+	}
 }
 
 func (e *env) club(slug string) domain.Club {

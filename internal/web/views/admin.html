@@ -10,6 +10,23 @@
 </form>
 {{else}}
 <p>Theme: <strong>{{.Theme}}</strong> (picked by {{.Picker.Name}})</p>
+
+{{if $.Data.Submissions}}
+<table class="compact">
+  <tr><th>Player</th><th></th></tr>
+  {{range $.Data.Submissions}}
+  <tr>
+    <td>{{.PlayerName}}</td>
+    <td>
+      <form class="inline" method="post" action="/c/{{$.Club.Slug}}/admin/rounds/{{$.Data.Round.Month}}/submissions/{{.ID}}/delete" onsubmit="return confirm('Delete this submission?');">
+        <button>Delete</button>
+      </form>
+    </td>
+  </tr>
+  {{end}}
+</table>
+{{end}}
+
 {{end}}
 {{else}}
 <form method="post" action="/c/{{.Club.Slug}}/admin/rounds">

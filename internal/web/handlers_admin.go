@@ -16,9 +16,15 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 	s.renderAdmin(w, r, http.StatusOK, "")
 }
 
+type adminSubmission struct {
+	ID         int64
+	PlayerName string
+}
+
 type adminView struct {
 	Players      []domain.Player
 	Round        *roundView // the round in progress, if any
+	Submissions  []adminSubmission
 	DefaultMonth string     // pre-filled in the "start a round" form
 }
 
@@ -41,6 +47,22 @@ func (s *Server) renderAdmin(w http.ResponseWriter, r *http.Request, status int,
 			return
 		}
 		view.Round = &v
+
+		subs, err := s.roundSvc.ListSubmissions(ctx, club.ID, round.ID)
+		if err != nil {
+			s.serverError(w, r, err)
+			return
+		}
+		names := make(map[int64]string)
+		for _, p := range players {
+			names[p.ID] = p.Name
+		}
+		for _, sub := range subs {
+			view.Submissions = append(view.Submissions, adminSubmission{
+				ID:         sub.ID,
+				PlayerName: names[sub.PlayerID],
+			})
+		}
 	case !errors.Is(err, store.ErrNotFound):
 		s.serverError(w, r, err)
 		return
@@ -127,6 +149,30 @@ func (s *Server) handleAdminPlayers(w http.ResponseWriter, r *http.Request) {
 		errors.Is(err, store.ErrPlayerNameTaken),
 		errors.Is(err, store.ErrLastAdmin):
 		s.renderAdmin(w, r, http.StatusUnprocessableEntity, err.Error())
+	default:
+		s.serverError(w, r, err)
+	}
+}
+
+// handleAdminDeleteSubmission deletes a player's submission.
+func (s *Server) handleAdminDeleteSubmission(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	round, ok := s.roundByMonth(w, r)
+	if !ok {
+		return
+	}
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		s.fail(w, r, http.StatusNotFound, "Invalid submission ID.")
+		return
+	}
+
+	err = s.roundSvc.DeleteSubmission(ctx, round.ClubID, round.ID, id)
+	switch {
+	case err == nil:
+		http.Redirect(w, r, clubPath(ctx, "/admin"), http.StatusSeeOther)
+	case errors.Is(err, store.ErrNotFound):
+		s.fail(w, r, http.StatusNotFound, "Submission not found.")
 	default:
 		s.serverError(w, r, err)
 	}

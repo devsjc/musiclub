@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"musiclub/internal/domain"
 	"musiclub/internal/store"
@@ -51,6 +52,11 @@ func (s *Server) withClub(next http.Handler) http.Handler {
 			s.serverError(w, r, err)
 			return
 		}
+
+		if err := s.roundSvc.Tick(r.Context(), time.Now()); err != nil {
+			slog.Error("lazy tick failed", "err", err)
+		}
+
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), clubKey, club)))
 	})
 }

@@ -55,6 +55,7 @@ func NewServer(db *sql.DB, cookieSecret string, loc *time.Location) *Server {
 	s.mux.Handle("POST /c/{club}/admin/players", s.adminRoute(s.handleAdminPlayers))
 	s.mux.Handle("POST /c/{club}/admin/rounds", s.adminRoute(s.handleAdminStartRound))
 	s.mux.Handle("POST /c/{club}/admin/rounds/{month}/reroll", s.adminRoute(s.handleAdminReroll))
+	s.mux.Handle("POST /c/{club}/admin/rounds/{month}/submissions/{id}/delete", s.adminRoute(s.handleAdminDeleteSubmission))
 	return s
 }
 

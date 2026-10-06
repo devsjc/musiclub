@@ -35,7 +35,7 @@ A small web app for groups of friends running a monthly music club. Each month o
 ## 3. The Rules (as implemented)
 
 **Submitting**
-1. Each player submits exactly one song per round (editable until the submission deadline).
+1. Each player submits exactly one song per round. Once submitted, it cannot be changed, though admins can delete a submission if needed.
 2. Duplicate songs are allowed. Duplicates are detected by a normalised `song_key` (§5.3).
 
 Every submission must carry a listening link. The server suggests matches for the typed artist and title (YouTube Music first, see §5.5); the player confirms one, or if none is right, pastes their own URL.
@@ -175,7 +175,7 @@ Trendsetter points depend on knowing two submissions are "the same song", so thi
 - `song_key` is computed on every submit from **artist + title**, normalised: lowercase, Unicode-folded, punctuation stripped, and noise removed (`feat. ...`, `(Remastered 2011)`, `- Single Version`, etc.). Artist+title is used rather than the URL because the same song on Spotify and YouTube has different URLs.
 - The key is stored on the submission and is **admin-editable during `review`**, so a missed duplicate (typo, different spelling) can be merged, or a false positive split, before points are written.
 - **Canonical metadata beats typing.** When the player confirms a matched candidate, the stored `artist`/`title` (and therefore the `song_key`) come from the service's metadata rather than the player's typing, so two players who pick the same track end up with the same key even if they typed it differently. The matched `external_id` (§5.5) is kept too, and the review page flags submissions that share an `external_id` but have different keys.
-- **Order:** the "first" submitter is determined by `submissions.submitted_at`, which is set on creation and **reset only if the edit changes the `song_key`**. Cosmetic edits (fixing a typo that doesn't change the key, updating the note) do not lose a player their place in line. Ties on timestamp fall back to lowest `id`.
+- **Order:** the "first" submitter is determined by `submissions.submitted_at`. Ties on timestamp fall back to lowest `id`.
 - **No duplicate warning at submit time.** Telling a player "someone has already picked this" would leak information about the other submissions before voting. Duplicates are only surfaced to the admin during review.
 
 ### 5.4 Theme-Picker Selection
@@ -322,7 +322,7 @@ CREATE TABLE submissions (
     external_id   TEXT,                               -- the service's track/video ID when matched
     note          TEXT,                               -- optional blurb by submitter
     song_key      TEXT    NOT NULL,                   -- normalised duplicate key (§5.3), admin-editable in review
-    submitted_at  TEXT    NOT NULL DEFAULT (datetime('now')),  -- reset only when song_key changes
+    submitted_at  TEXT    NOT NULL DEFAULT (datetime('now')),
     position      INTEGER,                            -- shuffled display order, set when voting opens
     UNIQUE (round_id, player_id)                      -- rule 1: one song per player per round
 );
@@ -489,6 +489,7 @@ Everything club-specific lives under `/c/{club}`. Full-page routes render comple
 | POST | `/c/{club}/admin/rounds` | **Kick off a round** (month; picker chosen randomly) |
 | POST | `/c/{club}/admin/rounds/{month}/reroll` | Re-roll picker (`theme_pending` only) |
 | GET | `/c/{club}/admin/rounds/{month}/review` | Review page: tallies, duplicates, candidate quotes |
+| POST | `/c/{club}/admin/rounds/{month}/submissions/{id}/delete` | Delete a submission (e.g. if a player chose the wrong song) |
 | POST | `/c/{club}/admin/rounds/{month}/song-keys` | Edit a submission's `song_key` (merge/split duplicates) |
 | POST | `/c/{club}/admin/rounds/{month}/quotes` | Add / remove / reorder featured quotes |
 | POST | `/c/{club}/admin/rounds/{month}/publish` | Publish: score, write events, close |
@@ -585,7 +586,7 @@ type Service interface {
 - `Publish` runs in **one transaction**: load results → `scoring.Score` → delete+insert `score_events` → set `phase='closed'`, `closed_at`. It refuses to run if there are no featured quotes for a winning category *unless* the admin explicitly confirms (so results aren't published half-curated by accident).
 - `recompute` re-runs the scoring step for a closed round (use after rule changes or a late `song_key` correction).
 - `Tick` iterates over all clubs; it takes an injected clock (`now`) for testing.
-- After `SubmitSong` commits, `linkresolver.Enrich` runs in a goroutine. If the player later changes the song (new `external_id` or `song_key`), the old `submission_links` rows are deleted and `Enrich` runs again.
+- After `SubmitSong` commits, `linkresolver.Enrich` runs in a goroutine.
 
 ## 11. Edge Cases
 
@@ -600,7 +601,7 @@ type Service interface {
 - **Admin edits `song_key` after publish:** run `recompute`.
 - **No provider configured, API down, or quota exhausted:** the form shows only the manual URL input; submitting always works.
 - **No good match:** the player chooses "none of these" and pastes a URL.
-- **Wrong match confirmed by mistake:** the player can edit and re-search until the deadline; extra links are recomputed.
+- **Wrong match confirmed by mistake:** the player must ask the admin to delete their submission so they can submit again.
 - **Pasted URL doesn't match the typed artist/title:** accepted as-is. It is not fetched or verified.
 - **Same song matched under different IDs** (e.g. an album track and a music-video upload): artist+title normalisation usually still groups them; otherwise the admin merges the `song_key` during review.
 
