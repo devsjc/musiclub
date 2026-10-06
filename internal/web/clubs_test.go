@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"database/sql"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -10,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"musiclub/internal/db"
 	"musiclub/internal/domain"
 	"musiclub/internal/store"
@@ -17,6 +20,7 @@ import (
 
 type env struct {
 	t       *testing.T
+	db      *sql.DB
 	h       http.Handler
 	clubs   *store.Clubs
 	players *store.Players
@@ -26,28 +30,22 @@ type env struct {
 func newEnv(t *testing.T) *env {
 	t.Helper()
 	d, err := db.Open(":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	t.Cleanup(func() { d.Close() })
-	return &env{t: t, h: NewServer(d, "test-secret", time.UTC).Handler(), clubs: store.NewClubs(d), players: store.NewPlayers(d), rounds: store.NewRounds(d)}
+	return &env{t: t, db: d, h: NewServer(d, "test-secret", time.UTC).Handler(), clubs: store.NewClubs(d), players: store.NewPlayers(d), rounds: store.NewRounds(d)}
 }
 
 func (e *env) club(slug string) domain.Club {
 	e.t.Helper()
 	c, err := e.clubs.Create(context.Background(), slug, slug+" Club")
-	if err != nil {
-		e.t.Fatal(err)
-	}
+	require.NoError(e.t, err)
 	return c
 }
 
 func (e *env) player(c domain.Club, name string, admin bool) domain.Player {
 	e.t.Helper()
 	p, err := e.players.Create(context.Background(), c.ID, name, admin)
-	if err != nil {
-		e.t.Fatal(err)
-	}
+	require.NoError(e.t, err)
 	return p
 }
 
@@ -81,15 +79,13 @@ func (e *env) login(c domain.Club, p *domain.Player) *http.Cookie {
 			return ck
 		}
 	}
-	e.t.Fatalf("whoami set no cookie: status %d", rec.Code)
+	require.FailNow(e.t, "whoami set no cookie", "status %d", rec.Code)
 	return nil
 }
 
 func wantStatus(t *testing.T, rec *httptest.ResponseRecorder, want int) {
 	t.Helper()
-	if rec.Code != want {
-		t.Fatalf("status = %d, want %d\n%s", rec.Code, want, rec.Body)
-	}
+	require.Equal(t, want, rec.Code, "body:\n%s", rec.Body)
 }
 
 func TestIndex(t *testing.T) {
@@ -97,23 +93,18 @@ func TestIndex(t *testing.T) {
 
 	rec := e.do("GET", "/", nil, domain.Club{}, nil)
 	wantStatus(t, rec, 200)
-	if !strings.Contains(rec.Body.String(), "No clubs yet") {
-		t.Fatal("empty index should say there are no clubs")
-	}
+	require.Contains(t, rec.Body.String(), "No clubs yet")
 
 	e.club("one")
 	rec = e.do("GET", "/", nil, domain.Club{}, nil)
 	wantStatus(t, rec, http.StatusFound)
-	if loc := rec.Header().Get("Location"); loc != "/c/one" {
-		t.Fatalf("redirect to %q, want /c/one", loc)
-	}
+	require.Equal(t, "/c/one", rec.Header().Get("Location"))
 
 	e.club("two")
 	rec = e.do("GET", "/", nil, domain.Club{}, nil)
 	wantStatus(t, rec, 200)
-	if body := rec.Body.String(); !strings.Contains(body, "/c/one") || !strings.Contains(body, "/c/two") {
-		t.Fatalf("index should list both clubs:\n%s", body)
-	}
+	require.Contains(t, rec.Body.String(), "/c/one")
+	require.Contains(t, rec.Body.String(), "/c/two")
 }
 
 func TestClubMiddleware(t *testing.T) {
@@ -125,9 +116,7 @@ func TestClubMiddleware(t *testing.T) {
 
 	rec := e.do("GET", "/c/friends", nil, c, nil)
 	wantStatus(t, rec, 200)
-	if !strings.Contains(rec.Body.String(), "friends club") {
-		t.Fatal("home should show the club name")
-	}
+	require.Contains(t, rec.Body.String(), "friends club")
 }
 
 func TestWhoami(t *testing.T) {
@@ -136,35 +125,30 @@ func TestWhoami(t *testing.T) {
 	sam := e.player(c, "Sam", false)
 	e.player(c, "Kit", true)
 	retired := e.player(c, "Retired", false)
-	if err := e.players.SetActive(context.Background(), c.ID, retired.ID, false); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, e.players.SetActive(context.Background(), c.ID, retired.ID, false))
 
 	rec := e.do("GET", "/c/friends/whoami", nil, c, nil)
 	wantStatus(t, rec, 200)
-	if body := rec.Body.String(); !strings.Contains(body, "sam") || !strings.Contains(body, "kit") || strings.Contains(body, "retired") {
-		t.Fatalf("whoami should list active players only:\n%s", body)
-	}
+	body := rec.Body.String()
+	require.Contains(t, body, "sam")
+	require.Contains(t, body, "kit")
+	require.NotContains(t, body, "retired", "whoami should list active players only")
 
 	// Picking a player sets a scoped, HttpOnly cookie and the home page greets them.
 	rec = e.do("POST", "/c/friends/whoami", nil, c, url.Values{"player_id": {strconv.FormatInt(sam.ID, 10)}})
 	wantStatus(t, rec, http.StatusSeeOther)
 	ck := rec.Result().Cookies()[0]
-	if ck.Name != "mc_friends" || ck.Path != "/c/friends" || !ck.HttpOnly {
-		t.Fatalf("unexpected cookie: %+v", ck)
-	}
+	require.Equal(t, "mc_friends", ck.Name)
+	require.Equal(t, "/c/friends", ck.Path)
+	require.True(t, ck.HttpOnly)
 	rec = e.do("GET", "/c/friends", &sam, c, nil)
-	if !strings.Contains(rec.Body.String(), "Hi sam.") {
-		t.Fatalf("home should greet sam:\n%s", rec.Body)
-	}
+	require.Contains(t, rec.Body.String(), "Hi sam.")
 
 	// Retired, unknown and non-numeric players are rejected.
 	for _, id := range []string{strconv.FormatInt(retired.ID, 10), "9999", "x", ""} {
 		rec = e.do("POST", "/c/friends/whoami", nil, c, url.Values{"player_id": {id}})
 		wantStatus(t, rec, http.StatusBadRequest)
-		if len(rec.Result().Cookies()) != 0 {
-			t.Fatalf("player_id %q: cookie set on rejected request", id)
-		}
+		require.Empty(t, rec.Result().Cookies(), "player_id %q: cookie set on rejected request", id)
 	}
 }
 
@@ -216,17 +200,14 @@ func TestAdminAccess(t *testing.T) {
 
 	rec := e.do("GET", "/c/friends/admin", nil, c, nil)
 	wantStatus(t, rec, http.StatusSeeOther)
-	if loc := rec.Header().Get("Location"); loc != "/c/friends/whoami" {
-		t.Fatalf("anonymous redirected to %q", loc)
-	}
+	require.Equal(t, "/c/friends/whoami", rec.Header().Get("Location"), "anonymous redirect")
 	wantStatus(t, e.do("GET", "/c/friends/admin", &member, c, nil), 403)
 	wantStatus(t, e.do("POST", "/c/friends/admin/players", &member, c,
 		url.Values{"action": {"add"}, "name": {"Sneaky"}}), 403)
 	wantStatus(t, e.do("GET", "/c/friends/admin", &admin, c, nil), 200)
 
-	if ps, _ := e.players.List(context.Background(), c.ID); len(ps) != 2 {
-		t.Fatalf("non-admin POST changed players: %+v", ps)
-	}
+	ps, _ := e.players.List(context.Background(), c.ID)
+	require.Len(t, ps, 2, "non-admin POST changed players")
 }
 
 func TestAdminPlayerManagement(t *testing.T) {
@@ -238,9 +219,7 @@ func TestAdminPlayerManagement(t *testing.T) {
 	}
 	list := func() []domain.Player {
 		ps, err := e.players.List(context.Background(), c.ID)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		return ps
 	}
 	find := func(name string) domain.Player {
@@ -249,26 +228,21 @@ func TestAdminPlayerManagement(t *testing.T) {
 				return p
 			}
 		}
-		t.Fatalf("no player %q", name)
+		require.FailNow(t, "no such player", "no player %q", name)
 		return domain.Player{}
 	}
 
 	wantStatus(t, post(url.Values{"action": {"add"}, "name": {"SAM"}}), http.StatusSeeOther)
 	sam := find("sam")
-	if sam.IsAdmin || !sam.Active {
-		t.Fatalf("new player = %+v", sam)
-	}
+	require.False(t, sam.IsAdmin)
+	require.True(t, sam.Active)
 	id := strconv.FormatInt(sam.ID, 10)
 
 	wantStatus(t, post(url.Values{"action": {"grant_admin"}, "player_id": {id}}), http.StatusSeeOther)
-	if !find("sam").IsAdmin {
-		t.Fatal("grant_admin did not stick")
-	}
+	require.True(t, find("sam").IsAdmin, "grant_admin did not stick")
 	wantStatus(t, post(url.Values{"action": {"revoke_admin"}, "player_id": {id}}), http.StatusSeeOther)
 	wantStatus(t, post(url.Values{"action": {"deactivate"}, "player_id": {id}}), http.StatusSeeOther)
-	if find("sam").Active {
-		t.Fatal("deactivate did not stick")
-	}
+	require.False(t, find("sam").Active, "deactivate did not stick")
 	wantStatus(t, post(url.Values{"action": {"activate"}, "player_id": {id}}), http.StatusSeeOther)
 
 	// A retired player's cookie stops working.
@@ -278,22 +252,16 @@ func TestAdminPlayerManagement(t *testing.T) {
 	req.AddCookie(samCookie)
 	rec := httptest.NewRecorder()
 	e.h.ServeHTTP(rec, req)
-	if strings.Contains(rec.Body.String(), "Hi sam") {
-		t.Fatal("retired player still recognised")
-	}
+	require.NotContains(t, rec.Body.String(), "Hi sam", "retired player still recognised")
 
 	// Errors re-render the page with a message and change nothing.
 	rec = post(url.Values{"action": {"add"}, "name": {"Sam"}})
 	wantStatus(t, rec, http.StatusUnprocessableEntity)
-	if !strings.Contains(rec.Body.String(), "already exists") {
-		t.Fatalf("duplicate name message missing:\n%s", rec.Body)
-	}
+	require.Contains(t, rec.Body.String(), "already exists")
 	wantStatus(t, post(url.Values{"action": {"add"}, "name": {" "}}), http.StatusUnprocessableEntity)
 	rec = post(url.Values{"action": {"revoke_admin"}, "player_id": {strconv.FormatInt(admin.ID, 10)}})
 	wantStatus(t, rec, http.StatusUnprocessableEntity)
-	if !strings.Contains(rec.Body.String(), "at least one active admin") {
-		t.Fatalf("last-admin message missing:\n%s", rec.Body)
-	}
+	require.Contains(t, rec.Body.String(), "at least one active admin")
 	wantStatus(t, post(url.Values{"action": {"explode"}}), http.StatusBadRequest)
 	wantStatus(t, post(url.Values{"action": {"deactivate"}, "player_id": {"nope"}}), http.StatusNotFound)
 }
@@ -308,14 +276,11 @@ func TestAdminCannotTouchOtherClubsPlayers(t *testing.T) {
 	rec := e.do("POST", "/c/a/admin/players", &adminA, a,
 		url.Values{"action": {"deactivate"}, "player_id": {strconv.FormatInt(bob.ID, 10)}})
 	wantStatus(t, rec, http.StatusNotFound)
-	if got, _ := e.players.Get(context.Background(), b.ID, bob.ID); !got.Active {
-		t.Fatal("club a's admin deactivated club b's player")
-	}
+	got, _ := e.players.Get(context.Background(), b.ID, bob.ID)
+	require.True(t, got.Active, "club a's admin deactivated club b's player")
 
 	rec = e.do("GET", "/c/a/admin", &adminA, a, nil)
-	if strings.Contains(rec.Body.String(), "bob") {
-		t.Fatal("admin page leaks other club's players")
-	}
+	require.NotContains(t, rec.Body.String(), "bob", "admin page leaks other club's players")
 }
 
 func TestCrossOriginPostRejected(t *testing.T) {
@@ -357,15 +322,11 @@ func TestRoundKickoffAndTheme(t *testing.T) {
 	wantStatus(t, start(&admin, "2026-03"), http.StatusSeeOther)
 	rec := start(&admin, "2026-04")
 	wantStatus(t, rec, http.StatusUnprocessableEntity)
-	if !strings.Contains(rec.Body.String(), "already has a round in progress") {
-		t.Fatalf("open-round message missing:\n%s", rec.Body)
-	}
+	require.Contains(t, rec.Body.String(), "already has a round in progress")
 
 	// Both players are in the first cycle's pool, so either may be picker; find out who.
 	round, err := e.rounds.ByMonth(context.Background(), c.ID, "2026-03")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	picker, other := admin, sam
 	if round.PickerID == sam.ID {
 		picker, other = sam, admin
@@ -374,20 +335,14 @@ func TestRoundKickoffAndTheme(t *testing.T) {
 	rec = e.do("GET", "/c/friends/rounds/2026-03", &other, c, nil)
 	wantStatus(t, rec, 200)
 	body := rec.Body.String()
-	if !strings.Contains(body, "Waiting on <strong>"+picker.Name+"</strong>") || strings.Contains(body, `name="theme"`) {
-		t.Fatalf("non-picker should see a waiting message and no form:\n%s", body)
-	}
+	require.Contains(t, body, "Waiting on <strong>"+picker.Name+"</strong>")
+	require.NotContains(t, body, `name="theme"`, "non-picker should not see the form")
 	rec = e.do("GET", "/c/friends/rounds/2026-03", &picker, c, nil)
-	if !strings.Contains(rec.Body.String(), `name="theme"`) {
-		t.Fatalf("picker should see the theme form:\n%s", rec.Body)
-	}
-	if rec = e.do("GET", "/c/friends", &other, c, nil); !strings.Contains(rec.Body.String(), "waiting on "+picker.Name) {
-		t.Fatalf("home should show the pending round:\n%s", rec.Body)
-	}
-
-	if rec = e.do("GET", "/c/friends", &picker, c, nil); !strings.Contains(rec.Body.String(), "your turn to pick the theme") {
-		t.Fatalf("home should prompt the picker:\n%s", rec.Body)
-	}
+	require.Contains(t, rec.Body.String(), `name="theme"`, "picker should see the theme form")
+	rec = e.do("GET", "/c/friends", &other, c, nil)
+	require.Contains(t, rec.Body.String(), "waiting on "+picker.Name, "home should show the pending round")
+	rec = e.do("GET", "/c/friends", &picker, c, nil)
+	require.Contains(t, rec.Body.String(), "your turn to pick the theme", "home should prompt the picker")
 
 	// Theme rules: logged in, the picker, non-empty.
 	theme := func(as *domain.Player, th string) *httptest.ResponseRecorder {
@@ -396,16 +351,14 @@ func TestRoundKickoffAndTheme(t *testing.T) {
 	wantStatus(t, theme(nil, "Rain"), http.StatusSeeOther)
 	wantStatus(t, theme(&other, "Rain"), 403)
 	wantStatus(t, theme(&picker, "  "), http.StatusUnprocessableEntity)
-	if r, _ := e.rounds.ByMonth(context.Background(), c.ID, "2026-03"); r.Phase != domain.PhaseThemePending {
-		t.Fatalf("rejected theme changed the round: %+v", r)
-	}
+	r, _ := e.rounds.ByMonth(context.Background(), c.ID, "2026-03")
+	require.Equal(t, domain.PhaseThemePending, r.Phase, "rejected theme changed the round")
 	wantStatus(t, theme(&picker, "Rain"), http.StatusSeeOther)
 	wantStatus(t, theme(&picker, "Sun"), http.StatusConflict)
 
 	rec = e.do("GET", "/c/friends/rounds/2026-03", &other, c, nil)
-	if body := rec.Body.String(); !strings.Contains(body, "Rain") || !strings.Contains(body, "Submissions open until") {
-		t.Fatalf("submitting page should show theme and deadline:\n%s", body)
-	}
+	require.Contains(t, rec.Body.String(), "Rain")
+	require.Contains(t, rec.Body.String(), "Submissions open until")
 	// Re-roll is no longer possible once the theme is set.
 	wantStatus(t, e.do("POST", "/c/friends/admin/rounds/2026-03/reroll", &admin, c, url.Values{}), http.StatusConflict)
 }
@@ -423,9 +376,7 @@ func TestAdminReroll(t *testing.T) {
 	wantStatus(t, e.do("POST", "/c/friends/admin/rounds/2026-09/reroll", &admin, c, url.Values{}), 404)
 	wantStatus(t, e.do("POST", "/c/friends/admin/rounds/2026-03/reroll", &admin, c, url.Values{}), http.StatusSeeOther)
 	after, _ := e.rounds.ByMonth(context.Background(), c.ID, "2026-03")
-	if after.PickerID == before.PickerID {
-		t.Fatalf("picker unchanged after re-roll: %d", after.PickerID)
-	}
+	require.NotEqual(t, before.PickerID, after.PickerID, "picker unchanged after re-roll")
 }
 
 func TestRoundsAreClubScopedOnTheWeb(t *testing.T) {
@@ -437,7 +388,6 @@ func TestRoundsAreClubScopedOnTheWeb(t *testing.T) {
 	wantStatus(t, e.do("POST", "/c/a/admin/rounds", &adminA, a, url.Values{"month": {"2026-03"}}), http.StatusSeeOther)
 	wantStatus(t, e.do("GET", "/c/a/rounds/2026-03", &adminA, a, nil), 200)
 	wantStatus(t, e.do("GET", "/c/b/rounds/2026-03", nil, b, nil), 404)
-	if rec := e.do("GET", "/c/b", nil, b, nil); !strings.Contains(rec.Body.String(), "No round in progress") {
-		t.Fatalf("club b home shows club a's round:\n%s", rec.Body)
-	}
+	rec := e.do("GET", "/c/b", nil, b, nil)
+	require.Contains(t, rec.Body.String(), "No round in progress", "club b home shows club a's round")
 }

@@ -6,27 +6,23 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"musiclub/internal/db"
 )
 
 func TestHealthz(t *testing.T) {
 	d, err := db.Open(":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer d.Close()
 	h := NewServer(d, "test-secret", time.UTC).Handler()
 
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest("GET", "/healthz", nil))
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200", rec.Code)
-	}
+	require.Equal(t, http.StatusOK, rec.Code)
 
 	d.Close()
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest("GET", "/healthz", nil))
-	if rec.Code != http.StatusServiceUnavailable {
-		t.Fatalf("closed db status = %d, want 503", rec.Code)
-	}
+	require.Equal(t, http.StatusServiceUnavailable, rec.Code, "closed db")
 }

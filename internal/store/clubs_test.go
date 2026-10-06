@@ -2,8 +2,9 @@ package store
 
 import (
 	"context"
-	"errors"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"musiclub/internal/db"
 )
@@ -11,9 +12,7 @@ import (
 func newClubs(t *testing.T) *Clubs {
 	t.Helper()
 	d, err := db.Open(":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	t.Cleanup(func() { d.Close() })
 	return NewClubs(d)
 }
@@ -22,28 +21,23 @@ func TestClubsCreateAndLookup(t *testing.T) {
 	s, ctx := newClubs(t), context.Background()
 
 	c, err := s.Create(ctx, "friday-friends", "  Friday FRIENDS ")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if c.Name != "friday friends" || c.SubmissionDays != 14 || c.VotingDays != 14 {
-		t.Fatalf("unexpected club: %+v", c)
-	}
+	require.NoError(t, err)
+	require.Equal(t, "friday friends", c.Name)
+	require.Equal(t, 14, c.SubmissionDays)
+	require.Equal(t, 14, c.VotingDays)
 
 	got, err := s.BySlug(ctx, "friday-friends")
-	if err != nil || got.ID != c.ID {
-		t.Fatalf("BySlug = %+v, %v", got, err)
-	}
-	if _, err := s.BySlug(ctx, "nope"); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("BySlug missing: err = %v, want ErrNotFound", err)
-	}
+	require.NoError(t, err)
+	require.Equal(t, c.ID, got.ID)
+	_, err = s.BySlug(ctx, "nope")
+	require.ErrorIs(t, err, ErrNotFound)
 }
 
 func TestClubsCreateValidation(t *testing.T) {
 	s, ctx := newClubs(t), context.Background()
 
-	if _, err := s.Create(ctx, "one", "One"); err != nil {
-		t.Fatal(err)
-	}
+	_, err := s.Create(ctx, "one", "One")
+	require.NoError(t, err)
 	cases := []struct {
 		slug, name string
 		want       error
@@ -55,22 +49,20 @@ func TestClubsCreateValidation(t *testing.T) {
 		{"fine", "  ", ErrNameRequired},
 	}
 	for _, c := range cases {
-		if _, err := s.Create(ctx, c.slug, c.name); !errors.Is(err, c.want) {
-			t.Errorf("Create(%q, %q) err = %v, want %v", c.slug, c.name, err, c.want)
-		}
+		_, err := s.Create(ctx, c.slug, c.name)
+		require.ErrorIs(t, err, c.want, "Create(%q, %q)", c.slug, c.name)
 	}
 }
 
 func TestClubsList(t *testing.T) {
 	s, ctx := newClubs(t), context.Background()
 	for slug, name := range map[string]string{"b": "Beta", "a": "Alpha"} {
-		if _, err := s.Create(ctx, slug, name); err != nil {
-			t.Fatal(err)
-		}
+		_, err := s.Create(ctx, slug, name)
+		require.NoError(t, err)
 	}
 
 	got, err := s.List(ctx)
-	if err != nil || len(got) != 2 || got[0].Slug != "a" {
-		t.Fatalf("List = %+v, %v", got, err)
-	}
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+	require.Equal(t, "a", got[0].Slug)
 }
