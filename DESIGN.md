@@ -416,7 +416,7 @@ SQL constraints cover rules 1, 4 and the "no player guessed twice" half of rule 
 - Writes to submissions only in `submitting`; ballots only in `voting`; quotes and song-key edits only in `review`.
 - A voter cannot vote for their own song in either category *(assumption, see §13)*.
 - **Full-assignment check:** let `S` = the set of submitters in the round. The ballot must contain exactly one guess for every submission except the voter's own, and the guessed players must be exactly `S` minus the voter (a bijection). A voter who did not submit a song guesses all `|S|` songs against all `|S|` submitters.
-- Ballots are editable until the voting deadline (upsert on `(round_id, voter_id)`, replacing all guess rows in one transaction).
+- Ballots are final once cast.
 - Quotes can only be attached to a winning submission, and only in the category it won.
 - **Link validation** (scheme, host allowlist for matched links, length cap, tracking-param stripping) runs before any submission is saved; a submission cannot exist without a valid primary `url` (§5.5).
 

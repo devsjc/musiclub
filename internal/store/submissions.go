@@ -92,12 +92,12 @@ func (s *Submissions) Create(ctx context.Context, clubID, roundID, playerID int6
 	return sub, tx.Commit()
 }
 
-// List returns all submissions for the round, ordered by submission time.
+// List returns all submissions for the round, ordered by position (or id).
 func (s *Submissions) List(ctx context.Context, clubID, roundID int64) ([]domain.Submission, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT `+submissionCols+` FROM submissions
 		  WHERE round_id = ? AND round_id IN (SELECT id FROM rounds WHERE id = ? AND club_id = ?)
-		  ORDER BY submitted_at`,
+		  ORDER BY COALESCE(position, id), id`,
 		roundID, roundID, clubID)
 	if err != nil {
 		return nil, err

@@ -1,0 +1,51 @@
+{{define "guesses_fragment"}}
+<fieldset id="guesses-fieldset">
+  <legend>Guesses</legend>
+  <p>Who submitted each song?</p>
+  {{$player := $.Player}}
+  {{$form := $.Data.Guesses}}
+  {{$club := $.Club}}
+  {{$roundMonth := $.Data.Month}}
+  {{$players := $.Data.BallotView.Players}}
+  {{range $.Data.BallotView.Submissions}}
+    {{if ne .PlayerID $player.ID}}
+    {{$selectName := printf "guess_%d" .ID}}
+    {{$currentSelection := index $form $selectName}}
+  {{$subID := .ID}}
+    <p>
+      <label>{{.Artist}} — {{.Title}}<br>
+      <select name="{{$selectName}}" required 
+              hx-get="/c/{{$club.Slug}}/rounds/{{$roundMonth}}/ballot-guesses"
+              hx-include="#guesses-fieldset"
+              hx-target="#guesses-fieldset"
+              hx-swap="outerHTML">
+        <option value="">-- Who is it? --</option>
+        {{range $players}}
+          {{if ne .ID $player.ID}}
+            {{$candidateID := printf "%d" .ID}}
+            {{$isSelected := false}}
+            {{if $currentSelection}}
+              {{if eq (index $currentSelection 0) $candidateID}}
+                {{$isSelected = true}}
+              {{end}}
+            {{end}}
+            
+            {{$isDisabled := false}}
+            {{if not $isSelected}}
+              {{range $k, $v := $form}}
+                {{if and (ne $k $selectName) (eq (index $v 0) $candidateID)}}
+                  {{$isDisabled = true}}
+                {{end}}
+              {{end}}
+            {{end}}
+            
+            <option value="{{.ID}}"{{if $isSelected}} selected{{end}}{{if $isDisabled}} disabled{{end}}>{{.Name}}</option>
+          {{end}}
+        {{end}}
+      </select>
+      </label>
+    </p>
+    {{end}}
+  {{end}}
+</fieldset>
+{{end}}

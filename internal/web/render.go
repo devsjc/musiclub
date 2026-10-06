@@ -28,7 +28,8 @@ func parseViews() map[string]*template.Template {
 	names := []string{"index", "home", "whoami", "admin", "round", "error"}
 	out := make(map[string]*template.Template, len(names))
 	for _, n := range names {
-		out[n] = template.Must(template.ParseFS(viewsFS, "views/layout.html", "views/"+n+".html"))
+		// Include all fragment files
+		out[n] = template.Must(template.ParseFS(viewsFS, "views/layout.html", "views/"+n+".html", "views/*_fragment.html"))
 	}
 	return out
 }
@@ -43,6 +44,19 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name
 	w.WriteHeader(status)
 	if err := s.views[name].ExecuteTemplate(w, "layout", p); err != nil {
 		slog.Error("render", "view", name, "err", err)
+	}
+}
+
+func (s *Server) renderFragment(w http.ResponseWriter, r *http.Request, status int, templateName string, p page) {
+	if c, ok := r.Context().Value(clubKey).(domain.Club); ok {
+		p.Club = &c
+	}
+	p.Player = playerFrom(r.Context())
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
+	if err := s.views["round"].ExecuteTemplate(w, templateName, p); err != nil {
+		slog.Error("render fragment", "template", templateName, "err", err)
 	}
 }
 

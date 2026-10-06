@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/url"
 	"time"
 
 	"musiclub/internal/domain"
@@ -62,12 +63,24 @@ type submitter struct {
 	Done bool
 }
 
+// ballotView holds the data for the voting phase form.
+type ballotView struct {
+	Submissions []domain.Submission
+	Players     []domain.Player // submitters who can be guessed
+	Voters      []submitter     // checklist of who has voted
+	Ballot      *domain.Ballot  // nil if the viewer hasn't voted yet
+	VotingOpen  bool            // false if the deadline passed
+	VotingDue   string
+}
+
 // roundPage is what the round page template renders.
 type roundPage struct {
 	roundView
 	Form       songForm
 	SubmitOpen bool // the submitting phase is still within its deadline
 	Submitters []submitter
+	BallotView *ballotView
+	Guesses    url.Values
 }
 
 func (s *Server) handleRound(w http.ResponseWriter, r *http.Request) {
@@ -113,8 +126,72 @@ func (s *Server) renderRoundForm(w http.ResponseWriter, r *http.Request, status 
 			form.Saved = view.Form.Saved
 			view.Form = *form
 		}
+	} else if round.Phase == domain.PhaseVoting {
+		bv := &ballotView{
+			VotingOpen: round.VotingDueAt != nil && time.Now().Before(*round.VotingDueAt),
+		}
+		if round.VotingDueAt != nil {
+			bv.VotingDue = round.VotingDueAt.In(s.loc).Format("Mon 2 Jan, 15:04")
+		}
+		subs, err := s.submissions.List(ctx, round.ClubID, round.ID)
+		if err != nil {
+			s.serverError(w, r, err)
+			return
+		}
+		bv.Submissions = subs
+
+		players, err := s.players.List(ctx, round.ClubID)
+		if err != nil {
+			s.serverError(w, r, err)
+			return
+		}
+		done, err := s.submissions.Submitters(ctx, round.ClubID, round.ID)
+		if err != nil {
+			s.serverError(w, r, err)
+			return
+		}
+		for _, p := range players {
+			if done[p.ID] {
+				bv.Players = append(bv.Players, p)
+			}
+		}
+
+		if bv.Voters, err = s.voterList(ctx, round); err != nil {
+			s.serverError(w, r, err)
+			return
+		}
+
+		if player := playerFrom(ctx); player != nil {
+			b, err := s.ballots.ByVoter(ctx, round.ClubID, round.ID, player.ID)
+			if err == nil {
+				bv.Ballot = &b
+			} else if !errors.Is(err, store.ErrNotFound) {
+				s.serverError(w, r, err)
+				return
+			}
+		}
+		view.BallotView = bv
 	}
 	s.render(w, r, status, "round", page{Title: round.Month, Error: msg, Data: view})
+}
+
+// voterList is every active player in the club, ticked if they have voted.
+func (s *Server) voterList(ctx context.Context, round domain.Round) ([]submitter, error) {
+	players, err := s.players.List(ctx, round.ClubID)
+	if err != nil {
+		return nil, err
+	}
+	done, err := s.ballots.Voters(ctx, round.ClubID, round.ID)
+	if err != nil {
+		return nil, err
+	}
+	var out []submitter
+	for _, p := range players {
+		if p.Active || done[p.ID] {
+			out = append(out, submitter{Name: p.Name, Done: done[p.ID]})
+		}
+	}
+	return out, nil
 }
 
 // submitterList is every active player in the club, ticked if they have submitted.
@@ -201,4 +278,85 @@ func (s *Server) handleSetTheme(w http.ResponseWriter, r *http.Request) {
 	default:
 		s.serverError(w, r, err)
 	}
+}
+
+// handleBallot saves the voter's ballot and guesses.
+func (s *Server) handleBallot(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	player := playerFrom(ctx)
+	if player == nil {
+		http.Redirect(w, r, clubPath(ctx, "/whoami"), http.StatusSeeOther)
+		return
+	}
+	round, ok := s.roundByMonth(w, r)
+	if !ok {
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	
+	// Create domain.Ballot from form
+	// We'll let a new rounds.Service method handle the business logic
+	err := s.roundSvc.SubmitBallot(ctx, round.ClubID, round.ID, player.ID, r.Form)
+	switch {
+	case err == nil:
+		http.Redirect(w, r, clubPath(ctx, "/rounds/"+round.Month), http.StatusSeeOther)
+	case errors.Is(err, store.ErrWrongPhase), errors.Is(err, store.ErrDeadlinePassed):
+		s.renderRound(w, r, http.StatusConflict, round, "Voting isn't open for this round.")
+	case errors.Is(err, store.ErrAlreadyVoted):
+		s.renderRound(w, r, http.StatusConflict, round, err.Error())
+	default:
+		// For other validation errors, show them on the form
+		if errors.Is(err, rounds.ErrInvalidBallot) {
+			s.renderRound(w, r, http.StatusUnprocessableEntity, round, err.Error())
+		} else {
+			s.serverError(w, r, err)
+		}
+	}
+}
+
+// handleBallotGuesses returns the guesses fragment for HTMX.
+func (s *Server) handleBallotGuesses(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	round, ok := s.roundByMonth(w, r)
+	if !ok {
+		return
+	}
+	
+	subs, err := s.submissions.List(ctx, round.ClubID, round.ID)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	
+	players, err := s.players.List(ctx, round.ClubID)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	done, err := s.submissions.Submitters(ctx, round.ClubID, round.ID)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	var guessPlayers []domain.Player
+	for _, p := range players {
+		if done[p.ID] {
+			guessPlayers = append(guessPlayers, p)
+		}
+	}
+	
+	_ = r.ParseForm()
+	view := roundPage{
+		roundView:  roundView{Round: round},
+		BallotView: &ballotView{Submissions: subs, Players: guessPlayers},
+		Guesses:    r.Form,
+	}
+
+	s.renderFragment(w, r, http.StatusOK, "guesses_fragment", page{
+		Title: round.Month,
+		Data:  view,
+	})
 }

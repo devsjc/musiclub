@@ -29,8 +29,9 @@ var (
 )
 
 type Service struct {
-	rounds *store.Rounds
-	subs   *store.Submissions
+	rounds  *store.Rounds
+	subs    *store.Submissions
+	ballots *store.Ballots
 	now     func() time.Time
 	intn    func(n int) int
 	shuffle func(n int, swap func(i, j int))
@@ -40,6 +41,7 @@ func New(db *sql.DB) *Service {
 	return &Service{
 		rounds:  store.NewRounds(db),
 		subs:    store.NewSubmissions(db),
+		ballots: store.NewBallots(db),
 		now:     time.Now,
 		intn:    rand.IntN,
 		shuffle: rand.Shuffle,

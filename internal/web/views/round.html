@@ -41,6 +41,65 @@
     {{range .Submitters}}<li>{{if .Done}}✓{{else}}<span class="muted">…</span>{{end}} {{.Name}}</li>
     {{end}}
   </ul>
+  {{else if eq .Phase "voting"}}
+  {{if .BallotView.VotingOpen}}<p>Voting open until {{.BallotView.VotingDue}}.</p>{{else}}<p>Voting closed at {{.BallotView.VotingDue}}.</p>{{end}}
+  
+  <h2>Songs</h2>
+  <ul class="plain">
+    {{range .BallotView.Submissions}}
+    <li>
+      <strong>{{.Artist}} — {{.Title}}</strong>
+      {{if .Note}}<br><span class="muted">"{{.Note}}"</span>{{end}}
+      <br><a href="{{.URL}}" target="_blank" rel="noopener noreferrer nofollow">Listen</a>
+    </li>
+    {{end}}
+  </ul>
+
+  {{if $.Player}}
+    <h2>Your ballot</h2>
+    {{if and .BallotView.VotingOpen (not .BallotView.Ballot)}}
+    <form method="post" action="/c/{{$.Club.Slug}}/rounds/{{.Month}}/ballot">
+      <fieldset>
+        <legend>Awards</legend>
+        <p>
+          <label>Favorite song<br>
+          <select name="favorite_submission_id" required>
+            <option value="">-- Choose a song --</option>
+            {{range .BallotView.Submissions}}{{if ne .PlayerID $.Player.ID}}<option value="{{.ID}}">{{.Artist}} — {{.Title}}</option>{{end}}{{end}}
+          </select>
+          </label>
+        </p>
+        <p><textarea name="favorite_comment" placeholder="Why is this your favorite? (optional)" maxlength="500" rows="2"></textarea></p>
+        
+        <p>
+          <label>Best fit for theme<br>
+          <select name="best_fit_submission_id" required>
+            <option value="">-- Choose a song --</option>
+            {{range .BallotView.Submissions}}{{if ne .PlayerID $.Player.ID}}<option value="{{.ID}}">{{.Artist}} — {{.Title}}</option>{{end}}{{end}}
+          </select>
+          </label>
+        </p>
+        <p><textarea name="best_fit_comment" placeholder="Why does this fit best? (optional)" maxlength="500" rows="2"></textarea></p>
+      </fieldset>
+
+      {{template "guesses_fragment" $}}
+      
+      <button>Submit ballot</button>
+    </form>
+    {{else if .BallotView.Ballot}}
+    <p>You have cast your ballot.</p>
+    {{else}}
+    <p class="muted">You didn't vote.</p>
+    {{end}}
+  {{else}}
+    <p><a href="/c/{{$.Club.Slug}}/whoami">Tell us who you are</a> to vote.</p>
+  {{end}}
+
+  <h2>Who has voted</h2>
+  <ul class="plain">
+    {{range .BallotView.Voters}}<li>{{if .Done}}✓{{else}}<span class="muted">…</span>{{end}} {{.Name}}</li>
+    {{end}}
+  </ul>
   {{end}}
 {{end}}
 {{end}}

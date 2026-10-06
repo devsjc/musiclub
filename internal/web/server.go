@@ -18,6 +18,7 @@ type Server struct {
 	players     *store.Players
 	rounds      *store.Rounds
 	submissions *store.Submissions
+	ballots     *store.Ballots
 	roundSvc    *rounds.Service
 	loc         *time.Location // zone for showing deadlines and choosing the default month
 	sessions    sessions
@@ -32,6 +33,7 @@ func NewServer(db *sql.DB, cookieSecret string, loc *time.Location) *Server {
 		players:     store.NewPlayers(db),
 		rounds:      store.NewRounds(db),
 		submissions: store.NewSubmissions(db),
+		ballots:     store.NewBallots(db),
 		roundSvc:    rounds.New(db),
 		loc:         loc,
 		sessions:    sessions{secret: []byte(cookieSecret)},
@@ -48,8 +50,10 @@ func NewServer(db *sql.DB, cookieSecret string, loc *time.Location) *Server {
 	s.mux.Handle("POST /c/{club}/whoami", s.clubRoute(s.handleSetWhoami))
 
 	s.mux.Handle("GET /c/{club}/rounds/{month}", s.clubRoute(s.handleRound))
+	s.mux.Handle("GET /c/{club}/rounds/{month}/ballot-guesses", s.clubRoute(s.handleBallotGuesses))
 	s.mux.Handle("POST /c/{club}/rounds/{month}/theme", s.clubRoute(s.handleSetTheme))
 	s.mux.Handle("POST /c/{club}/rounds/{month}/submission", s.clubRoute(s.handleSubmission))
+	s.mux.Handle("POST /c/{club}/rounds/{month}/ballot", s.clubRoute(s.handleBallot))
 
 	s.mux.Handle("GET /c/{club}/admin", s.adminRoute(s.handleAdmin))
 	s.mux.Handle("POST /c/{club}/admin/players", s.adminRoute(s.handleAdminPlayers))
