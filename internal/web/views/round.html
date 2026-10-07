@@ -6,7 +6,6 @@
   <p>You're picking the theme this month.</p>
   <form method="post" action="/c/{{$.Club.Slug}}/rounds/{{.Month}}/theme">
     <p><input type="text" name="theme" placeholder="Theme" maxlength="100" required></p>
-    <p><textarea name="description" placeholder="Description (optional)" maxlength="500" rows="3"></textarea></p>
     <button>Set theme</button>
   </form>
   {{else}}
@@ -14,7 +13,6 @@
   {{end}}
 {{else}}
   <h2>{{.Theme}}</h2>
-  {{if .ThemeDescription}}<p>{{.ThemeDescription}}</p>{{end}}
   <p class="muted">Picked by {{.Picker.Name}}.</p>
   {{if eq .Phase "submitting"}}
   {{if .SubmitOpen}}<p>Submissions open until {{.SubmissionsDue}} <span class="countdown">({{.Left}})</span>.</p>{{else}}<p>Submissions closed at {{.SubmissionsDue}}.</p>{{end}}
@@ -22,7 +20,7 @@
     <h2>Your song</h2>
     {{if and .SubmitOpen (not .Form.Saved)}}
     <div id="submission-form">
-      <form hx-post="/c/{{$.Club.Slug}}/rounds/{{.Month}}/submission/search" hx-target="#submission-step2" hx-swap="innerHTML">
+      <form method="post" action="/c/{{$.Club.Slug}}/rounds/{{.Month}}/submission/search" hx-post="/c/{{$.Club.Slug}}/rounds/{{.Month}}/submission/search" hx-target="#submission-step2" hx-swap="innerHTML">
         <p><input type="text" name="artist" placeholder="Artist" value="{{.Form.Artist}}" maxlength="200" required></p>
         <p><input type="text" name="title" placeholder="Title" value="{{.Form.Title}}" maxlength="200" required></p>
         <p><textarea name="note" placeholder="Note (optional)" maxlength="500" rows="2">{{.Form.Note}}</textarea></p>
@@ -64,9 +62,6 @@
       <strong>{{.Artist}} — {{.Title}}</strong>
       {{if .Note}}<br><span class="muted">"{{.Note}}"</span>{{end}}
       <br><a href="{{.URL}}" target="_blank" rel="noopener noreferrer nofollow">Listen</a>
-      {{range .ExtraLinks}}
-      <a href="{{.URL}}" target="_blank" rel="noopener noreferrer nofollow" title="Listen on {{.Service}}"><small>[{{.Service}}]</small></a>
-      {{end}}
     </li>
     {{end}}
   </ul>

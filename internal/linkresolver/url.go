@@ -1,5 +1,6 @@
-// Package linkresolver deals with listening links (DESIGN.md §5.5). For now it
-// only validates and classifies pasted URLs; provider search comes later.
+// Package linkresolver deals with listening links (DESIGN.md §5.5): it
+// validates and classifies pasted URLs, and suggests YouTube Music matches for
+// a typed artist and title.
 package linkresolver
 
 import (

@@ -16,7 +16,7 @@ func TestTickAdvancesSubmittingToVoting(t *testing.T) {
 	r, err := s.StartRound(ctx, club.ID, "2026-03")
 	require.NoError(t, err)
 
-	require.NoError(t, s.SetTheme(ctx, club.ID, r.ID, r.PickerID, "Rain", ""))
+	require.NoError(t, s.SetTheme(ctx, club.ID, r.ID, r.PickerID, "Rain"))
 
 	// Time passes, but deadline not met and player hasn't submitted
 	require.NoError(t, s.Tick(ctx, s.now()))
@@ -56,7 +56,7 @@ func TestTickAdvancesSubmittingByDeadline(t *testing.T) {
 
 	r, err := s.StartRound(ctx, club.ID, "2026-03")
 	require.NoError(t, err)
-	require.NoError(t, s.SetTheme(ctx, club.ID, r.ID, r.PickerID, "Rain", ""))
+	require.NoError(t, s.SetTheme(ctx, club.ID, r.ID, r.PickerID, "Rain"))
 
 	// Submitting deadline is in 14 days. Advance time 15 days.
 	future := s.now().AddDate(0, 0, 15)
@@ -73,7 +73,7 @@ func TestTickAdvancesVotingToReviewByDeadline(t *testing.T) {
 
 	r, err := s.StartRound(ctx, club.ID, "2026-03")
 	require.NoError(t, err)
-	require.NoError(t, s.SetTheme(ctx, club.ID, r.ID, r.PickerID, "Rain", ""))
+	require.NoError(t, s.SetTheme(ctx, club.ID, r.ID, r.PickerID, "Rain"))
 
 	// Submitting deadline is in 14 days. Advance time 15 days.
 	future := s.now().AddDate(0, 0, 15)

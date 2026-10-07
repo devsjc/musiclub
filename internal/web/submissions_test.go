@@ -2,9 +2,11 @@ package web
 
 import (
 	"context"
+	"html"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -13,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"musiclub/internal/domain"
+	"musiclub/internal/linkresolver"
 )
 
 // submittingClub sets up a club with players sam (admin) and kit, and a round for
@@ -78,52 +81,116 @@ func TestSubmissionFlow(t *testing.T) {
 	require.Contains(t, rec.Body.String(), "You have already submitted")
 }
 
-func TestSubmissionMatchingFlow(t *testing.T) {
-	e := newEnv(t)
+// fakeProvider returns canned suggestions and counts how often it is asked.
+type fakeProvider struct {
+	matches []linkresolver.Match
+	calls   int
+}
+
+func (f *fakeProvider) Search(context.Context, string, string) ([]linkresolver.Match, error) {
+	f.calls++
+	return f.matches, nil
+}
+
+var hiddenInput = regexp.MustCompile(`<input type="hidden" name="([^"]+)" value="([^"]*)">`)
+
+// hiddenFields is what a browser would post back from the fragment's hidden inputs.
+func hiddenFields(body string) url.Values {
+	out := url.Values{}
+	for _, m := range hiddenInput.FindAllStringSubmatch(body, -1) {
+		out.Add(m[1], html.UnescapeString(m[2]))
+	}
+	return out
+}
+
+func savedSong(t *testing.T, e *env, c domain.Club, p domain.Player) domain.Submission {
+	t.Helper()
+	round, err := e.rounds.ByMonth(context.Background(), c.ID, "2026-03")
+	require.NoError(t, err)
+	sub, err := e.submissions.ByPlayer(context.Background(), c.ID, round.ID, p.ID)
+	require.NoError(t, err)
+	return sub
+}
+
+func TestSubmissionSuggestionsFlow(t *testing.T) {
+	provider := &fakeProvider{matches: []linkresolver.Match{
+		{ExternalID: "vid1", URL: linkresolver.MatchURLPrefix + "vid1", Title: "Radio Ga Ga (Live)", Artist: "Queen"},
+		{ExternalID: "vid2", URL: linkresolver.MatchURLPrefix + "vid2", Title: "Radio Ga Ga", Artist: "Queen"},
+	}}
+	e := newEnvWith(t, provider)
+	c, sam, _ := submittingClub(t, e, "friends")
+	page := "/c/friends/rounds/2026-03"
+	typed := url.Values{"artist": {"queen"}, "title": {"radio gaga"}, "note": {"Cool note"}}
+
+	// Step 1: the search offers each suggestion and lets the player paste their own instead.
+	rec := e.do("POST", page+"/submission/search", &sam, c, typed)
+	wantStatus(t, rec, http.StatusOK)
+	body := rec.Body.String()
+	require.Contains(t, body, "Queen — Radio Ga Ga (Live)")
+	require.Contains(t, body, "Queen — Radio Ga Ga")
+	require.Contains(t, body, "None of these")
+	require.Contains(t, body, `#submission-form [name='artist']`, "the paste-my-own step needs the typed artist and title")
+
+	// Searching again is served from the cache.
+	wantStatus(t, e.do("POST", page+"/submission/search", &sam, c, typed), http.StatusOK)
+	require.Equal(t, 1, provider.calls, "provider calls")
+
+	// Step 2: confirming the second suggestion stores the service's own artist and title.
+	form := hiddenFields(body)
+	form.Set("candidate_index", "1")
+	wantStatus(t, e.do("POST", page+"/submission", &sam, c, form), http.StatusSeeOther)
+	sub := savedSong(t, e, c, sam)
+	require.Equal(t, "Queen", sub.Artist)
+	require.Equal(t, "Radio Ga Ga", sub.Title)
+	require.Equal(t, linkresolver.MatchURLPrefix+"vid2", sub.URL)
+	require.Equal(t, "youtube_music", sub.URLService)
+	require.Equal(t, "matched", sub.LinkSource)
+	require.Equal(t, "vid2", sub.ExternalID)
+	require.Equal(t, "Cool note", sub.Note)
+}
+
+func TestSubmissionWithoutSuggestionsAsksForALink(t *testing.T) {
+	e := newEnv(t) // no provider configured
 	c, sam, _ := submittingClub(t, e, "friends")
 	page := "/c/friends/rounds/2026-03"
 
-	// 1. Search endpoint (unconfigured provider degrades gracefully to manual URL input)
-	recSearch := e.do("POST", page+"/submission/search", &sam, c, url.Values{
-		"artist": {"Queen"}, "title": {"Radio Ga Ga"}, "note": {"Cool note"},
-	})
-	require.Equal(t, http.StatusOK, recSearch.Code)
-	bodySearch := recSearch.Body.String()
-	require.Contains(t, bodySearch, "Couldn't find matches")
-	require.Contains(t, bodySearch, `name="url"`)
+	rec := e.do("POST", page+"/submission/search", &sam, c, url.Values{"artist": {"Queen"}, "title": {"Radio Ga Ga"}, "note": {""}})
+	wantStatus(t, rec, http.StatusOK)
+	body := rec.Body.String()
+	require.Contains(t, body, "Couldn't find matches")
+	require.Equal(t, 1, strings.Count(body, `name="link_source"`), "a pasted link must not also claim to be a suggestion")
 
-	// 2. Manual URL endpoint
-	recManual := e.do("GET", page+"/submission/manual-url", &sam, c, url.Values{
-		"artist": {"Queen"}, "title": {"Radio Ga Ga"}, "note": {"Cool note"},
-	})
-	require.Equal(t, http.StatusOK, recManual.Code)
-	bodyManual := recManual.Body.String()
-	require.Contains(t, bodyManual, `name="url"`)
-
-	// 3. Submitting with matched candidate stores canonical metadata and link_source = matched
-	recSubmit := e.do("POST", page+"/submission", &sam, c, url.Values{
-		"artist":          {"typed queen"},
-		"title":           {"typed radio ga ga"},
-		"link_source":     {"matched"},
-		"candidate_index": {"0"},
-		"match_0_url":     {"https://music.youtube.com/watch?v=vid123"},
-		"match_0_service": {"youtube_music"},
-		"match_0_extid":   {"vid123"},
-		"match_0_artist":  {"Queen"},
-		"match_0_title":   {"Radio Ga Ga"},
-	})
-	wantStatus(t, recSubmit, http.StatusSeeOther)
-
-	round, err := e.rounds.ByMonth(context.Background(), c.ID, "2026-03")
-	require.NoError(t, err)
-	sub, err := e.submissions.ByPlayer(context.Background(), c.ID, round.ID, sam.ID)
-	require.NoError(t, err)
+	form := hiddenFields(body)
+	form.Set("url", "https://example.com/radio")
+	wantStatus(t, e.do("POST", page+"/submission", &sam, c, form), http.StatusSeeOther)
+	sub := savedSong(t, e, c, sam)
+	require.Equal(t, "manual", sub.LinkSource)
+	require.Empty(t, sub.ExternalID)
 	require.Equal(t, "Queen", sub.Artist)
-	require.Equal(t, "Radio Ga Ga", sub.Title)
-	require.Equal(t, "https://music.youtube.com/watch?v=vid123", sub.URL)
-	require.Equal(t, "youtube_music", sub.URLService)
-	require.Equal(t, "matched", sub.LinkSource)
-	require.Equal(t, "vid123", sub.ExternalID)
+	require.Equal(t, "other", sub.URLService)
+
+	// The "paste my own link" fragment carries the typed song through.
+	rec = e.do("GET", page+"/submission/manual-url?"+url.Values{"artist": {"A"}, "title": {"T"}, "note": {"n"}}.Encode(), &sam, c, nil)
+	wantStatus(t, rec, http.StatusOK)
+	require.Equal(t, url.Values{"artist": {"A"}, "title": {"T"}, "note": {"n"}, "link_source": {"manual"}}, hiddenFields(rec.Body.String()))
+}
+
+func TestSubmissionRefusesForeignSuggestionLinks(t *testing.T) {
+	e := newEnv(t)
+	c, sam, _ := submittingClub(t, e, "friends")
+	post := func(link string) *httptest.ResponseRecorder {
+		return e.do("POST", "/c/friends/rounds/2026-03/submission", &sam, c, url.Values{
+			"artist": {"Queen"}, "title": {"Radio Ga Ga"}, "link_source": {"matched"}, "candidate_index": {"0"},
+			"match_0_url": {link}, "match_0_extid": {"x"},
+		})
+	}
+	// Suggestions round-trip through the browser, so only our own links count.
+	for _, link := range []string{"https://evil.example/watch?v=x", "https://www.youtube.com/watch?v=x", ""} {
+		rec := post(link)
+		require.Equal(t, http.StatusUnprocessableEntity, rec.Code, link)
+	}
+	require.NotContains(t, e.do("GET", "/c/friends/rounds/2026-03", &sam, c, nil).Body.String(), "✓", "nothing saved")
+	wantStatus(t, post(linkresolver.MatchURLPrefix+"x"), http.StatusSeeOther)
 }
 
 func TestAdminDeleteSubmission(t *testing.T) {

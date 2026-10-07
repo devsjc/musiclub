@@ -3,9 +3,10 @@ package stats
 import (
 	"context"
 	"database/sql"
+	"time"
+
 	"musiclub/internal/domain"
 	"musiclub/internal/scoring"
-	"time"
 )
 
 const sqliteTime = "2006-01-02 15:04:05"

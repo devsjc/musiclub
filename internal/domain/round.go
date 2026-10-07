@@ -20,7 +20,6 @@ type Round struct {
 	Cycle            int    // picker rotation cycle within the club
 	PickerID         int64
 	Theme            string // empty until the picker sets it
-	ThemeDescription string
 	Phase            Phase
 	SubmissionsDueAt *time.Time // set when the theme is chosen
 	VotingDueAt      *time.Time // set when voting opens

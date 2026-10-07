@@ -19,7 +19,7 @@ func submittingRound(t *testing.T) (*Service, domain.Club, domain.Player, domain
 	ctx := context.Background()
 	r, err := s.StartRound(ctx, club.ID, "2026-03")
 	require.NoError(t, err)
-	require.NoError(t, s.SetTheme(ctx, club.ID, r.ID, sam.ID, "Rain", ""))
+	require.NoError(t, s.SetTheme(ctx, club.ID, r.ID, sam.ID, "Rain"))
 	return s, club, sam, r
 }
 

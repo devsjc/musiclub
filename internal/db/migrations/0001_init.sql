@@ -26,7 +26,6 @@ CREATE TABLE rounds (
     cycle                 INTEGER NOT NULL,           -- picker rotation cycle (per club)
     picker_id             INTEGER NOT NULL REFERENCES players(id),
     theme                 TEXT,                       -- NULL until picker sets it
-    theme_description     TEXT,
     phase                 TEXT    NOT NULL DEFAULT 'theme_pending'
                           CHECK (phase IN ('theme_pending','submitting','voting','review','closed')),
     submissions_due_at    TEXT,                       -- set when theme is chosen
@@ -77,17 +76,6 @@ CREATE TABLE guesses (
     guessed_player_id   INTEGER NOT NULL REFERENCES players(id),
     PRIMARY KEY (ballot_id, submission_id),
     UNIQUE (ballot_id, guessed_player_id)                       -- rule 5: no player guessed twice
-);
-
--- Extra listening links for a submission's song on other services (best-effort, filled in
--- asynchronously after the submission is saved). The primary link stays on submissions.url.
-CREATE TABLE submission_links (
-    submission_id  INTEGER NOT NULL REFERENCES submissions(id) ON DELETE CASCADE,
-    service        TEXT    NOT NULL CHECK (service IN ('youtube_music','spotify','qobuz')),
-    url            TEXT    NOT NULL,
-    external_id    TEXT,
-    created_at     TEXT    NOT NULL DEFAULT (datetime('now')),
-    PRIMARY KEY (submission_id, service)
 );
 
 -- Cache of provider search responses (saves quota and latency). Safe to delete at any time.

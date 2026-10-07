@@ -162,7 +162,7 @@ func TestRoundsRerollRefusals(t *testing.T) {
 	_, err = e.rounds.Reroll(ctx, e.other.ID, r.ID, first)
 	require.ErrorIs(t, err, ErrNotFound, "other club")
 
-	require.NoError(t, e.rounds.SetTheme(ctx, e.club.ID, r.ID, sam.ID, "Rain", "", time.Now()))
+	require.NoError(t, e.rounds.SetTheme(ctx, e.club.ID, r.ID, sam.ID, "Rain", time.Now()))
 	_, err = e.rounds.Reroll(ctx, e.club.ID, r.ID, first)
 	require.ErrorIs(t, err, ErrWrongPhase, "after theme")
 }
@@ -179,22 +179,21 @@ func TestRoundsSetTheme(t *testing.T) {
 	require.Equal(t, sam.ID, r.PickerID)
 	now := time.Date(2026, 1, 5, 12, 30, 0, 0, time.UTC)
 
-	require.ErrorIs(t, e.rounds.SetTheme(ctx, e.club.ID, r.ID, kit.ID, "Rain", "", now), ErrNotPicker, "non-picker")
-	require.ErrorIs(t, e.rounds.SetTheme(ctx, e.other.ID, r.ID, sam.ID, "Rain", "", now), ErrNotFound, "other club")
+	require.ErrorIs(t, e.rounds.SetTheme(ctx, e.club.ID, r.ID, kit.ID, "Rain", now), ErrNotPicker, "non-picker")
+	require.ErrorIs(t, e.rounds.SetTheme(ctx, e.other.ID, r.ID, sam.ID, "Rain", now), ErrNotFound, "other club")
 	got, _ := e.rounds.Get(ctx, e.club.ID, r.ID)
 	require.Equal(t, domain.PhaseThemePending, got.Phase, "rejected writes changed the round")
 
-	require.NoError(t, e.rounds.SetTheme(ctx, e.club.ID, r.ID, sam.ID, "Rain", "songs for a wet day", now))
+	require.NoError(t, e.rounds.SetTheme(ctx, e.club.ID, r.ID, sam.ID, "Rain", now))
 	got, err = e.rounds.ByMonth(ctx, e.club.ID, "2026-01")
 	require.NoError(t, err)
 	require.Equal(t, domain.PhaseSubmitting, got.Phase)
 	require.Equal(t, "Rain", got.Theme)
-	require.Equal(t, "songs for a wet day", got.ThemeDescription)
 	wantDue := time.Date(2026, 1, 15, 12, 30, 0, 0, time.UTC)
 	require.NotNil(t, got.SubmissionsDueAt)
 	require.True(t, got.SubmissionsDueAt.Equal(wantDue), "due = %v, want %v", got.SubmissionsDueAt, wantDue)
 
-	require.ErrorIs(t, e.rounds.SetTheme(ctx, e.club.ID, r.ID, sam.ID, "Sun", "", now), ErrWrongPhase, "second SetTheme")
+	require.ErrorIs(t, e.rounds.SetTheme(ctx, e.club.ID, r.ID, sam.ID, "Sun", now), ErrWrongPhase, "second SetTheme")
 }
 
 func TestRoundsAreClubScoped(t *testing.T) {

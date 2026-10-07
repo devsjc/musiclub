@@ -15,6 +15,7 @@ import (
 
 	"musiclub/internal/db"
 	"musiclub/internal/domain"
+	"musiclub/internal/linkresolver"
 	"musiclub/internal/store"
 )
 
@@ -28,15 +29,19 @@ type env struct {
 	submissions *store.Submissions
 }
 
-func newEnv(t *testing.T) *env {
+func newEnv(t *testing.T) *env { return newEnvWith(t, nil) }
+
+// newEnvWith is newEnv with a link-matching provider (nil: none configured).
+func newEnvWith(t *testing.T, provider linkresolver.Provider) *env {
 	t.Helper()
 	d, err := db.Open(":memory:")
 	require.NoError(t, err)
 	t.Cleanup(func() { d.Close() })
+	resolver := linkresolver.NewResolver(store.NewLinkCache(d), time.Hour, provider)
 	return &env{
 		t:           t,
 		db:          d,
-		h:           NewServer(d, "test-secret", time.UTC, nil).Handler(),
+		h:           NewServer(d, "test-secret", time.UTC, resolver).Handler(),
 		clubs:       store.NewClubs(d),
 		players:     store.NewPlayers(d),
 		rounds:      store.NewRounds(d),
@@ -355,7 +360,7 @@ func TestRoundKickoffAndTheme(t *testing.T) {
 
 	// Theme rules: logged in, the picker, non-empty.
 	theme := func(as *domain.Player, th string) *httptest.ResponseRecorder {
-		return e.do("POST", "/c/friends/rounds/2026-03/theme", as, c, url.Values{"theme": {th}, "description": {"wet"}})
+		return e.do("POST", "/c/friends/rounds/2026-03/theme", as, c, url.Values{"theme": {th}})
 	}
 	wantStatus(t, theme(nil, "Rain"), http.StatusSeeOther)
 	wantStatus(t, theme(&other, "Rain"), 403)

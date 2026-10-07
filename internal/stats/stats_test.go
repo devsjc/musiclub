@@ -37,7 +37,7 @@ func setupClosedRound(t *testing.T) (*Store, *rounds.Service, domain.Club, domai
 	// Round
 	r, err := svc.StartRound(ctx, club.ID, "2026-03")
 	require.NoError(t, err)
-	require.NoError(t, svc.SetTheme(ctx, club.ID, r.ID, r.PickerID, "Rain", ""))
+	require.NoError(t, svc.SetTheme(ctx, club.ID, r.ID, r.PickerID, "Rain"))
 
 	// Submissions
 	sub1, err := svc.SubmitSong(ctx, club.ID, r.ID, sam.ID, rounds.Song{Artist: "Queen", Title: "Song 1", URL: "https://example.com/1"})

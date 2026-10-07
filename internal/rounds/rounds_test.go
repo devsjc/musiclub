@@ -57,23 +57,21 @@ func TestSetThemeValidation(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, c := range []struct {
-		theme, desc string
-		want        error
+		theme string
+		want  error
 	}{
-		{"", "", ErrThemeRequired},
-		{"   ", "", ErrThemeRequired},
-		{strings.Repeat("x", maxTheme+1), "", ErrThemeTooLong},
-		{"Rain", strings.Repeat("x", maxDescription+1), ErrDescriptionTooLong},
+		{"", ErrThemeRequired},
+		{"   ", ErrThemeRequired},
+		{strings.Repeat("x", maxTheme+1), ErrThemeTooLong},
 	} {
-		err := s.SetTheme(ctx, club.ID, r.ID, sam.ID, c.theme, c.desc)
-		require.ErrorIs(t, err, c.want, "SetTheme(%.10q, %.10q)", c.theme, c.desc)
+		err := s.SetTheme(ctx, club.ID, r.ID, sam.ID, c.theme)
+		require.ErrorIs(t, err, c.want, "SetTheme(%.10q)", c.theme)
 	}
 
-	require.NoError(t, s.SetTheme(ctx, club.ID, r.ID, sam.ID, "  Rain ", " wet "))
+	require.NoError(t, s.SetTheme(ctx, club.ID, r.ID, sam.ID, "  Rain "))
 	got, err := s.rounds.Get(ctx, club.ID, r.ID)
 	require.NoError(t, err)
 	require.Equal(t, "Rain", got.Theme)
-	require.Equal(t, "wet", got.ThemeDescription)
 	require.Equal(t, domain.PhaseSubmitting, got.Phase)
 	wantDue := time.Date(2026, 3, 15, 9, 0, 0, 0, time.UTC) // club default: 14 days
 	require.NotNil(t, got.SubmissionsDueAt)

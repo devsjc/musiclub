@@ -25,7 +25,7 @@ func votingRound(t *testing.T) (*Service, domain.Club, domain.Round, domain.Play
 
 	r, err := s.StartRound(ctx, club.ID, "2026-03")
 	require.NoError(t, err)
-	require.NoError(t, s.SetTheme(ctx, club.ID, r.ID, r.PickerID, "Rain", ""))
+	require.NoError(t, s.SetTheme(ctx, club.ID, r.ID, r.PickerID, "Rain"))
 
 	sub1, err := s.SubmitSong(ctx, club.ID, r.ID, sam.ID, Song{Artist: "Queen", Title: "Song 1", URL: "https://example.com/1"})
 	require.NoError(t, err)

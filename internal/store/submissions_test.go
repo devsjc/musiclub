@@ -27,7 +27,7 @@ func newSubs(t *testing.T) *subsEnv {
 	sam, kit := e.player(t, e.club, "sam"), e.player(t, e.club, "kit")
 	r, err := e.rounds.Create(ctx, e.club.ID, "2026-03", first)
 	require.NoError(t, err)
-	require.NoError(t, e.rounds.SetTheme(ctx, e.club.ID, r.ID, r.PickerID, "Rain", "", t0))
+	require.NoError(t, e.rounds.SetTheme(ctx, e.club.ID, r.ID, r.PickerID, "Rain", t0))
 	r, err = e.rounds.Get(ctx, e.club.ID, r.ID)
 	require.NoError(t, err)
 	return &subsEnv{roundsEnv: e, subs: NewSubmissions(e.rounds.db), round: r, sam: sam, kit: kit}

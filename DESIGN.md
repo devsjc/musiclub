@@ -10,7 +10,7 @@ A small web app for groups of friends running a monthly music club. Each month o
 - Small codebase a single person can hold in their head.
 - Scoring rules isolated in one pure, well-tested package so they can change without touching anything else.
 - Every piece of data and every URL is scoped to a club, so adding a second group later needs no migration or refactor.
-- Song link matching (YouTube Music, Spotify, ...) is a convenience, never a dependency: if every external service is down or unconfigured, players can still submit by pasting a URL.
+- Song link matching (YouTube Music) is a convenience, never a dependency: if every external service is down or unconfigured, players can still submit by pasting a URL.
 
 **Non-goals (for now)**
 - Authentication and accounts (see §8.4 for a stopgap).
@@ -30,7 +30,7 @@ A small web app for groups of friends running a monthly music club. Each month o
 | Templates | `templ` (recommended) or `html/template` | Type-safe components; `html/template` is fine if you want zero codegen |
 | Interactivity | HTMX (vendored, served from `/static`) | Partial swaps, no client state |
 | Styling | One small hand-written CSS file (or Pico.css / Simple.css) | Keep it light |
-| Music link lookup | `net/http` clients behind a small `Provider` interface (§5.5) | No SDKs; providers are swappable and optional |
+| Music link lookup | Unofficial YouTube Music client (`ytmusicapi`) behind a small `Provider` interface (§5.5) | Optional; the app works without it |
 
 ## 3. The Rules (as implemented)
 
@@ -123,9 +123,9 @@ Layering rule: dependencies point downward only. `scoring` depends on nothing bu
 ### 5.1 Project Layout
 
 ```
-musicclub/
+musiclub/
 ├── cmd/
-│   └── musicclub/
+│   └── musiclub/
 │       └── main.go            # wiring; also tiny subcommands: `club add`, `healthcheck`
 ├── internal/
 │   ├── config/                # env var parsing
@@ -141,11 +141,11 @@ musicclub/
 │   │   ├── rounds.go
 │   │   ├── submissions.go
 │   │   ├── ballots.go
-│   │   ├── links.go           # submission_links + link_cache
+│   │   ├── link_cache.go
 │   │   ├── quotes.go
 │   │   └── scores.go
 │   ├── songkey/               # PURE: normalise artist/title/URL into a duplicate-detection key
-│   ├── linkresolver/          # Provider interface, YouTube/Spotify clients, cache, URL validation
+│   ├── linkresolver/          # Provider interface, YouTube Music client, cache, URL validation
 │   ├── rounds/                # lifecycle service: kickoff, picker, advance phases, publish
 │   ├── scoring/               # PURE: Results in -> Events out. Heavily unit tested.
 │   ├── stats/                 # read-side queries for monthly + cumulative views
@@ -190,51 +190,38 @@ Trendsetter points depend on knowing two submissions are "the same song", so thi
 
 During the submission stage the server looks up the song the player typed and offers matching listening links, so voters get a one-click "Listen" button instead of a hand-pasted URL of uneven quality.
 
-**A note on "the YouTube Music API":** there is no official YouTube Music API. The realistic options are below; all of them sit behind the same `Provider` interface, so the choice can be changed without touching the rest of the app.
+**The provider is the unofficial YouTube Music client** [`github.com/prettyirrelevant/ytmusicapi`](https://pkg.go.dev/github.com/prettyirrelevant/ytmusicapi) (a Go take on Python's `ytmusicapi`). There is no official YouTube Music API; the client emulates the web app using headers copied from a logged-in browser, so it can break without notice and sits in a grey area of YouTube's terms. That is acceptable here because matching is a convenience (§1), and everything sits behind a one-method `Provider` interface so it can be swapped.
 
-| Service | Official API? | Suggested approach | Notes |
-|---|---|---|---|
-| **YouTube Music** | No | **Default:** YouTube Data API v3 `search.list` (`type=video`, `videoCategoryId=10` for Music), turning each result's video ID into `https://music.youtube.com/watch?v={id}`. **Alternative:** an unofficial client for YouTube Music's internal endpoints (the approach `ytmusicapi` takes). | Data API: free key, default quota of 10,000 units/day with a search costing 100, so roughly 100 searches/day, plenty for a friend group. Results are YouTube videos rather than YT Music "Songs" entries, so ranking is a bit noisier. The unofficial route ranks better but can break without notice and sits in a grey area of the terms of service. |
-| **Spotify** | Yes | Web API `GET /v1/search?type=track` with the client-credentials flow (no user login). | Clean metadata, including ISRC. Easy win. |
-| **Qobuz** | No public API for new developers (to my knowledge) | **Phase 2, optional.** Either a best-effort unofficial client, or just a clearly labelled "Search on Qobuz" link built from artist + title (not a verified match). | Lowest priority. |
-| *(alternative)* Odesli / song.link | Yes | Resolve one confirmed link into links on other services in a single call. | Third-party dependency; check which services it covers and its rate limits before relying on it. |
-
-Please verify current terms, quotas and endpoints before building; these change.
+- **Setup:** follow the library's README to turn a copied request into `ytmusic_headers.json`, and pass its contents in `YTMUSIC_HEADERS_JSON` (§12). The value carries a logged-in Google session cookie: treat it as a secret, and prefer a throwaway account.
+- **What it returns:** only the video ID, title and artists for each result, with no album, thumbnail or duration. Searches use the "songs" filter and every result links to `https://music.youtube.com/watch?v={id}`.
+- **Library quirks the code works around:** `Setup()` panics on missing or bad headers, so `SetupYTMusic` validates them first and the app starts without matching if they are unset; it cannot find `__Secure-3PAPISID` unless that cookie is first, so the cookie header is normalised; it takes no `context` and parses with unchecked indexing, so each search runs in a goroutine that the 3s deadline can abandon and that turns a panic into an error.
 
 ```go
 package linkresolver
 
 type Match struct {
-    Service    string        // "youtube_music" | "spotify" | "qobuz"
-    ExternalID string        // video / track ID
-    URL        string        // canonical listening URL
+    ExternalID string // video ID
+    URL        string // https://music.youtube.com/watch?v={id}
     Title      string
     Artist     string
-    Album      string
-    Duration   time.Duration
-    ThumbURL   string
 }
 
 type Provider interface {
-    Service() string
     Search(ctx context.Context, artist, title string) ([]Match, error)
 }
 
-type Resolver struct { /* primary Provider, extras []Provider, cache, limiter */ }
+type Resolver struct { /* provider, cache, limiter */ }
 
-// Candidates: primary provider only, <= 5 results, 3s timeout, cache first.
+// Candidates: <= 2 results, 3s timeout, cache first. No provider: no candidates.
 func (r *Resolver) Candidates(ctx context.Context, artist, title string) ([]Match, error)
-
-// Enrich: look up the other services for a saved submission (async, best-effort).
-func (r *Resolver) Enrich(ctx context.Context, submissionID int64) error
 ```
 
-Providers are only registered when their credentials are configured (§12). With none configured, the flow below collapses to the manual URL box.
+With no headers configured, the flow below collapses to the manual URL box.
 
 **Flow**
 
 ```
- Player            Browser (HTMX)             Server                       External APIs
+ Player            Browser (HTMX)             Server                       YouTube Music
    │  artist+title      │                        │                               │
    ├───────────────────►│ POST …/submission/search                               │
    │                    ├───────────────────────►│ cache? ─ miss ─► Search ──────►│ YT Music
@@ -244,28 +231,25 @@ Providers are only registered when their credentials are configured (§12). With
    ├───────────────────►│ POST …/submission      │
    │                    ├───────────────────────►│ validate, save submission
    │                    │◄── "saved ✓" ──────────┤
-   │                    │                        │ goroutine: Enrich ───────────► Spotify (+ Qobuz)
-   │                    │                        │ saves extra links when found
 ```
 
 1. The player fills in artist and title and presses **Find song**. (A button, not search-as-you-type, to save API quota.)
-2. `POST …/submission/search` returns an HTMX fragment of up to five candidate cards: thumbnail, title, artist, album, duration and a "preview" link that opens in a new tab. Each card is a radio option carrying its data in hidden fields.
+2. `POST …/submission/search` returns an HTMX fragment of up to two candidate cards: artist, title and a "preview" link that opens in a new tab. Each card is a radio option carrying its data in hidden fields.
 3. The last option is always **"None of these, I'll paste my own link"**, which reveals a URL input (a small `hx-get` fragment).
 4. `POST …/submission` saves the song. Choosing a candidate stores `link_source = 'matched'` plus the candidate's canonical artist/title (§5.3). Pasting stores `link_source = 'manual'` with the player's own artist/title.
-5. After the save commits, `Enrich` runs in a goroutine: it searches the *other* configured services using the confirmed canonical artist and title, accepts only **high-confidence** matches (normalised artist and title both equal), and writes them to `submission_links`. Failures are ignored; this is purely additive.
-6. During voting each song shows a primary **Listen** button (`submissions.url`) plus small icons for any extra services found.
+5. During voting each song shows a **Listen** button (`submissions.url`).
 
 **Graceful degradation.** If the provider is unconfigured, errors, times out or returns nothing, the fragment says "Couldn't find matches, paste a link instead" and shows the URL box directly. Submission is never blocked by an external service.
 
 **Trust and validation (server-side, because candidates round-trip through hidden fields)**
 - URLs must parse and use `http` or `https`; `javascript:`, `data:` and the like are rejected; length is capped.
-- For `matched` links the host must be on the allowlist for the claimed service (`music.youtube.com`, `open.spotify.com`, ...) and the external ID must look sane for that service.
-- For `manual` links any http(s) host is accepted (Bandcamp, SoundCloud, ...). The server never fetches a pasted URL, which avoids SSRF. Known hosts are classified into `url_service` and tracking parameters such as `si=` are stripped; anything else is `other`.
+- A `matched` link must start with `https://music.youtube.com/watch?v=`, the only form the provider produces; anything else is refused.
+- For `manual` links any http(s) host is accepted (Bandcamp, SoundCloud, ...). The server never fetches a pasted URL, which avoids SSRF. Known hosts (YouTube Music, Spotify, Qobuz) are classified into `url_service` and tracking parameters such as `si=` are stripped; anything else is `other`.
 - All stored links are rendered with `target="_blank" rel="noopener noreferrer nofollow"`.
 
 **Anonymity.** Search results go only to the player searching. The cache is internal and never displayed, so nothing about other players' songs leaks during the submission stage.
 
-**Caching and rate limiting.** Provider responses are cached in `link_cache` keyed by `(provider, normalised "artist|title")` with a TTL (default 7 days). A process-wide semaphore and small token bucket cap outbound calls. At ~10 players a month this is more than enough.
+**Caching and rate limiting.** Provider responses are cached in `link_cache` keyed by `("ytmusic", normalised "artist|title")` with a TTL (default 7 days). A process-wide semaphore caps concurrent outbound calls. At ~10 players a month this is more than enough.
 
 ## 6. Database Schema
 
@@ -298,7 +282,6 @@ CREATE TABLE rounds (
     cycle                 INTEGER NOT NULL,           -- picker rotation cycle (per club)
     picker_id             INTEGER NOT NULL REFERENCES players(id),
     theme                 TEXT,                       -- NULL until picker sets it
-    theme_description     TEXT,
     phase                 TEXT    NOT NULL DEFAULT 'theme_pending'
                           CHECK (phase IN ('theme_pending','submitting','voting','review','closed')),
     submissions_due_at    TEXT,                       -- set when theme is chosen
@@ -349,17 +332,6 @@ CREATE TABLE guesses (
     guessed_player_id   INTEGER NOT NULL REFERENCES players(id),
     PRIMARY KEY (ballot_id, submission_id),
     UNIQUE (ballot_id, guessed_player_id)                       -- rule 5: no player guessed twice
-);
-
--- Extra listening links for a submission's song on other services (best-effort, filled in
--- asynchronously after the submission is saved). The primary link stays on submissions.url.
-CREATE TABLE submission_links (
-    submission_id  INTEGER NOT NULL REFERENCES submissions(id) ON DELETE CASCADE,
-    service        TEXT    NOT NULL CHECK (service IN ('youtube_music','spotify','qobuz')),
-    url            TEXT    NOT NULL,
-    external_id    TEXT,
-    created_at     TEXT    NOT NULL DEFAULT (datetime('now')),
-    PRIMARY KEY (submission_id, service)
 );
 
 -- Cache of provider search responses (saves quota and latency). Safe to delete at any time.
@@ -495,7 +467,7 @@ Everything club-specific lives under `/c/{club}`. Full-page routes render comple
 | POST | `/c/{club}/admin/rounds/{month}/publish` | Publish: score, write events, close |
 | POST | `/c/{club}/admin/rounds/{month}/recompute` | Re-run scoring for a closed round |
 
-Club creation is deliberately **not** a web route for now: use the CLI (`musicclub club add --slug friends --name "Friday Friends"`), which keeps the exposed surface small. Easy to add a site-admin page later.
+Club creation is deliberately **not** a web route for now: use the CLI (`musiclub club add --slug friends --name "Friday Friends"`), which keeps the exposed surface small. Easy to add a site-admin page later.
 
 ### 8.2 Round Page by Phase
 
@@ -503,7 +475,7 @@ Club creation is deliberately **not** a web route for now: use the CLI (`musiccl
 |---|---|
 | `theme_pending` | "Waiting on **Sam** to pick a theme." The picker sees the theme form. |
 | `submitting` | Theme, deadline countdown, two-step submission form (artist + title, then pick a suggested match or paste a URL; §5.5), "who has submitted" checklist (names only, never songs). |
-| `voting` | Anonymised, shuffled song list, each with a Listen button (primary link) plus icons for any other services found; the ballot form; "who has voted" checklist. |
+| `voting` | Anonymised, shuffled song list, each with a Listen button (primary link) ; the ballot form; "who has voted" checklist. |
 | `review` | Players: "Voting is closed. Results are coming soon." Admin: link to the review page. |
 | `closed` | Full reveal: who chose what, tallies, **featured quotes** for the winning songs, points breakdown, monthly stats. |
 
@@ -519,7 +491,7 @@ Club creation is deliberately **not** a web route for now: use the CLI (`musiccl
 
 ### 8.4 Current Player and Admin Without Auth
 
-For now: `/c/{club}/whoami` shows a list of the club's players; choosing one stores their `player_id` in a signed cookie (one cookie per club, e.g. `mc_{slug}`). A middleware reads it and puts the `Player` on the context. Admin routes additionally require `player.is_admin`. Because the first admin can't be created through the web UI, `musicclub player add --club SLUG --name NAME [--admin]` bootstraps players from the CLI; the admin page refuses to retire or demote a club's last active admin. This is a convenience, not security. Anyone can pick anyone. It does give a clean seam: when real auth is added later, only this middleware changes.
+For now: `/c/{club}/whoami` shows a list of the club's players; choosing one stores their `player_id` in a signed cookie (one cookie per club, e.g. `mc_{slug}`). A middleware reads it and puts the `Player` on the context. Admin routes additionally require `player.is_admin`. Because the first admin can't be created through the web UI, `musiclub player add --club SLUG --name NAME [--admin]` bootstraps players from the CLI; the admin page refuses to retire or demote a club's last active admin. This is a convenience, not security. Anyone can pick anyone. It does give a clean seam: when real auth is added later, only this middleware changes.
 
 ## 9. Statistics
 
@@ -572,7 +544,7 @@ type Service interface {
     Publish(ctx, roundID) error                            // review -> closed
 
     // Players
-    SetTheme(ctx, roundID, pickerID, theme, desc string) error // -> submitting
+    SetTheme(ctx, roundID, pickerID, theme string) error // -> submitting
     SuggestLinks(ctx, artist, title string) ([]Match, error) // read-only, no DB writes
     SubmitSong(ctx, roundID, playerID, Song) error  // Song carries a LinkChoice (matched or manual); validates the URL
     SaveBallot(ctx, roundID, voterID, BallotInput) error
@@ -586,7 +558,6 @@ type Service interface {
 - `Publish` runs in **one transaction**: load results → `scoring.Score` → delete+insert `score_events` → set `phase='closed'`, `closed_at`. It refuses to run if there are no featured quotes for a winning category *unless* the admin explicitly confirms (so results aren't published half-curated by accident).
 - `recompute` re-runs the scoring step for a closed round (use after rule changes or a late `song_key` correction).
 - `Tick` iterates over all clubs; it takes an injected clock (`now`) for testing.
-- After `SubmitSong` commits, `linkresolver.Enrich` runs in a goroutine.
 
 ## 11. Edge Cases
 
@@ -616,17 +587,17 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 # If using templ: RUN go install github.com/a-h/templ/cmd/templ@latest && templ generate
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/musicclub ./cmd/musicclub
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/musiclub ./cmd/musiclub
 
 FROM gcr.io/distroless/static-debian12:nonroot
-COPY --from=build /out/musicclub /musicclub
+COPY --from=build /out/musiclub /musiclub
 VOLUME /data
 ENV DB_PATH=/data/club.db PORT=8080 TZ=Europe/London
 EXPOSE 8080
-ENTRYPOINT ["/musicclub"]
+ENTRYPOINT ["/musiclub"]
 ```
 
-Distroless has no shell or `curl`; use `musicclub healthcheck` (a tiny subcommand that GETs `/healthz`) for Docker's `HEALTHCHECK`. Run one-off commands with `docker exec <ctr> /musicclub club add ...`.
+Distroless has no shell or `curl`; use `musiclub healthcheck` (a tiny subcommand that GETs `/healthz`) for Docker's `HEALTHCHECK`. Run one-off commands with `docker exec <ctr> /musiclub club add ...`.
 
 ### Configuration (env vars)
 
@@ -636,12 +607,10 @@ Distroless has no shell or `curl`; use `musicclub healthcheck` (a tiny subcomman
 | `DB_PATH` | `/data/club.db` | SQLite file (mount a volume!) |
 | `COOKIE_SECRET` | (required) | Signs the "who am I" cookie |
 | `TIMEZONE` | `Europe/London` | Deadlines are interpreted in this zone |
-| `YOUTUBE_API_KEY` | (unset) | Enables YouTube Music matching via the YouTube Data API v3 |
-| `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | (unset) | Enables Spotify matching (client-credentials flow) |
-| `QOBUZ_*` | (unset) | Reserved for an optional Qobuz provider (phase 2) |
+| `YTMUSIC_HEADERS_JSON` | (unset) | Enables YouTube Music link matching: the contents of `ytmusic_headers.json` (§5.5). Secret. |
 | `LINK_CACHE_TTL` | `168h` | How long provider search responses are cached |
 
-A provider is enabled only when its credentials are present, and the container needs outbound HTTPS for them. Pass keys via env vars or Docker secrets, never bake them into the image.
+Link matching is enabled only when the headers are present, and the container needs outbound HTTPS for it. Pass keys via env vars or Docker secrets, never bake them into the image.
 
 Window lengths (`submission_days`, `voting_days`) live on the `clubs` row, so each group can differ.
 
@@ -660,17 +629,17 @@ These are my interpretations of the rules; each is a small, local change if wron
 5. **Featured quotes:** taken from the voters' comments on the winning songs (the favourite comment for the Best Song winner, the best-fit comment for the Best Theme winner). If you meant the submitter's own `note` as well, it is trivial to offer it as another candidate in the picker.
 6. **`review` phase:** introduced so the admin can curate quotes and fix duplicates *before* the reveal. Results stay hidden until the admin publishes.
 7. **Duplicate detection** keys on normalised artist + title (not URL), with an admin override.
-8. **YouTube Music:** since no official API exists, v1 uses the YouTube Data API v3 (music category) and rewrites results to `music.youtube.com` links. Swap in an unofficial client later if match quality is poor.
-9. **Spotify** is matched via the official API in v1. **Qobuz** is deferred (optional search link at most).
+8. **YouTube Music:** since no official API exists, matching uses the unofficial `ytmusicapi` client (§5.5). It can break without notice; if it does, submitting by pasted link still works.
+9. **Other services** (Spotify, Qobuz, ...) are not matched; their pasted links are classified but never searched.
 10. **Matched metadata overwrites what the player typed** (artist/title), which improves duplicate detection. Manual URLs keep the player's own text.
 11. **Manual URLs** may point anywhere (Bandcamp, SoundCloud, ...) and are never fetched or verified.
-12. **One primary link per song:** the one the player confirmed or pasted. Links on other services are best-effort extras.
+12. **One link per song:** the one the player confirmed or pasted.
 
 ## 14. Testing Strategy
 
 - **`scoring`:** table-driven unit tests; the most valuable tests in the project. Cases: simple round, tied winners, zero votes, both-category winner, 2- and 3-way duplicates, trendsetter order after a key-changing edit.
 - **`songkey`:** table of equivalent/non-equivalent titles (`feat.`, remasters, punctuation, accents).
-- **`linkresolver`:** providers tested against `httptest` servers with recorded JSON fixtures. Cover timeout and failure fallthrough, cache hit and expiry, URL validation (scheme, host allowlist, `javascript:` rejection) and the high-confidence rule for extra links. Handlers are tested with a fake `Provider`, so no test touches the network.
+- **`linkresolver`:** the resolver is tested with a fake `Provider` (cache hit and expiry, the two-result cap, errors not cached, no provider); the YouTube Music client's result mapping and header normalisation are pure functions tested directly; URL validation covers scheme, `javascript:` rejection and tracking params. Handlers are tested with a fake `Provider`, so no test touches the network.
 - **`rounds`:** phase-transition tests with an injected clock against in-memory SQLite, including the full-assignment validator and the review→publish flow.
 - **`store`:** integration tests on `:memory:` SQLite with migrations applied; include a **two-club test** asserting no data leaks between clubs.
 - **`web`:** a few `httptest` smoke tests per route (renders, rejects wrong-phase writes, hides results before `closed`, rejects non-admins).
@@ -685,6 +654,6 @@ These are my interpretations of the rules; each is a small, local change if wron
 6. Ballot form with guess assignment (HTMX disabling of used players).
 7. `scoring` package + tests, then admin review page, quote picker and `Publish`.
 8. Results page, then monthly and cumulative stats.
-9. Link matching (can ship independently, since the manual-URL form already works): `linkresolver` with the YouTube provider, candidate-card fragment, "paste my own URL" fallback and `link_cache`; then the Spotify provider and async `Enrich`.
+9. Link matching (can ship independently, since the manual-URL form already works): `linkresolver` with the YouTube Music provider, candidate-card fragment, "paste my own URL" fallback and `link_cache`.
 10. Polish: countdowns, polling fragments, empty states.
-11. Later: Qobuz provider, real auth, embedded players, notifications (email/webhook when a phase opens), a site-admin page for creating clubs.
+11. Later: more link providers (Spotify, Qobuz), real auth, embedded players, notifications (email/webhook when a phase opens), a site-admin page for creating clubs.

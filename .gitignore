@@ -2,3 +2,4 @@ bin/
 *.db
 *.db-shm
 *.db-wal
+ytmusic_headers*

@@ -20,7 +20,7 @@ var (
 	ErrNotPicker     = errors.New("only the picker can set the theme")
 )
 
-const roundCols = `id, club_id, month, cycle, picker_id, COALESCE(theme, ''), COALESCE(theme_description, ''),
+const roundCols = `id, club_id, month, cycle, picker_id, COALESCE(theme, ''),
 	phase, submissions_due_at, voting_due_at, created_at, closed_at`
 
 // ChoosePicker is given the IDs of the eligible players (never empty) and
@@ -140,13 +140,13 @@ func (s *Rounds) Reroll(ctx context.Context, clubID, roundID int64, choose Choos
 // SetTheme stores the theme and opens the submission window: the round moves
 // to submitting with a deadline of now plus the club's submission_days. Only
 // the round's picker may do this, and only while it is theme_pending.
-func (s *Rounds) SetTheme(ctx context.Context, clubID, roundID, pickerID int64, theme, description string, now time.Time) error {
+func (s *Rounds) SetTheme(ctx context.Context, clubID, roundID, pickerID int64, theme string, now time.Time) error {
 	res, err := s.db.ExecContext(ctx,
 		`UPDATE rounds
-		    SET theme = ?, theme_description = NULLIF(?, ''), phase = 'submitting',
+		    SET theme = ?, phase = 'submitting',
 		        submissions_due_at = datetime(?, '+' || (SELECT submission_days FROM clubs WHERE id = rounds.club_id) || ' days')
 		  WHERE club_id = ? AND id = ? AND picker_id = ? AND phase = 'theme_pending'`,
-		theme, description, now.UTC().Format(sqliteTime), clubID, roundID, pickerID)
+		theme, now.UTC().Format(sqliteTime), clubID, roundID, pickerID)
 	if err != nil {
 		return err
 	}
@@ -223,7 +223,7 @@ func scanRound(row interface{ Scan(...any) error }) (domain.Round, error) {
 	var r domain.Round
 	var phase, created string
 	var subDue, voteDue, closed sql.NullString
-	if err := row.Scan(&r.ID, &r.ClubID, &r.Month, &r.Cycle, &r.PickerID, &r.Theme, &r.ThemeDescription,
+	if err := row.Scan(&r.ID, &r.ClubID, &r.Month, &r.Cycle, &r.PickerID, &r.Theme,
 		&phase, &subDue, &voteDue, &created, &closed); err != nil {
 		return domain.Round{}, err
 	}

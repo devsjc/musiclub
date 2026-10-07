@@ -5,133 +5,83 @@ import (
 	"time"
 
 	"golang.org/x/sync/semaphore"
-	"musiclub/internal/domain"
+
 	"musiclub/internal/songkey"
 )
 
+const (
+	maxCandidates  = 2
+	searchTimeout  = 3 * time.Second
+	maxConcurrency = 4
+)
+
+// Match is a candidate listening link for a song.
 type Match struct {
-	Service    string        `json:"service"`
-	ExternalID string        `json:"external_id"`
-	URL        string        `json:"url"`
-	Title      string        `json:"title"`
-	Artist     string        `json:"artist"`
-	Album      string        `json:"album"`
-	Duration   time.Duration `json:"duration"`
-	ThumbURL   string        `json:"thumb_url"`
+	ExternalID string `json:"external_id"` // the service's video ID
+	URL        string `json:"url"`
+	Title      string `json:"title"`
+	Artist     string `json:"artist"`
 }
 
+// Provider looks up listening links for a song. Search must respect ctx.
 type Provider interface {
-	Service() string
 	Search(ctx context.Context, artist, title string) ([]Match, error)
 }
 
-type LinkStore interface {
-	GetLinkCache(ctx context.Context, provider, queryKey string, maxAge time.Duration) ([]Match, error)
-	SetLinkCache(ctx context.Context, provider, queryKey string, matches []Match) error
-	AddSubmissionLink(ctx context.Context, submissionID int64, service, url, externalID string) error
-	GetSubmissionLinks(ctx context.Context, submissionID int64) ([]domain.SubmissionLink, error)
+// Cache stores provider responses (DESIGN.md §5.5).
+type Cache interface {
+	Get(ctx context.Context, provider, queryKey string, maxAge time.Duration) ([]Match, error)
+	Set(ctx context.Context, provider, queryKey string, matches []Match) error
 }
 
+// Resolver suggests links for a typed artist and title. Without a provider it
+// suggests nothing, so submitting falls back to pasting a URL.
 type Resolver struct {
-	primary Provider
-	extras  []Provider
-	store   LinkStore
-	ttl     time.Duration
-	limiter *semaphore.Weighted
+	provider Provider
+	cache    Cache
+	ttl      time.Duration
+	limiter  *semaphore.Weighted
 }
 
-func NewResolver(store LinkStore, cacheTTL time.Duration, primary Provider, extras ...Provider) *Resolver {
+func NewResolver(cache Cache, cacheTTL time.Duration, provider Provider) *Resolver {
 	return &Resolver{
-		primary: primary,
-		extras:  extras,
-		store:   store,
-		ttl:     cacheTTL,
-		limiter: semaphore.NewWeighted(10), // Small token bucket for outbound calls
+		provider: provider,
+		cache:    cache,
+		ttl:      cacheTTL,
+		limiter:  semaphore.NewWeighted(maxConcurrency),
 	}
 }
 
+// Candidates returns up to five matches: from the cache if fresh, otherwise
+// from the provider under a short timeout.
 func (r *Resolver) Candidates(ctx context.Context, artist, title string) ([]Match, error) {
-	if r.primary == nil {
-		return nil, nil // No provider, no candidates
+	if r.provider == nil {
+		return nil, nil
 	}
-
 	queryKey := songkey.Key(artist, title)
 	if queryKey == "" {
 		return nil, nil
 	}
 
-	providerName := r.primary.Service()
-
-	// Cache check
-	cached, err := r.store.GetLinkCache(ctx, providerName, queryKey, r.ttl)
-	if err == nil && cached != nil {
+	if cached, err := r.cache.Get(ctx, cacheProvider, queryKey, r.ttl); err == nil && cached != nil {
 		return cached, nil
 	}
 
-	// Rate limit
 	if err := r.limiter.Acquire(ctx, 1); err != nil {
 		return nil, err
 	}
 	defer r.limiter.Release(1)
 
-	// Timeout for Candidates (3s)
-	searchCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	searchCtx, cancel := context.WithTimeout(ctx, searchTimeout)
 	defer cancel()
-
-	matches, err := r.primary.Search(searchCtx, artist, title)
+	matches, err := r.provider.Search(searchCtx, artist, title)
 	if err != nil {
 		return nil, err
 	}
-
-	if len(matches) > 5 {
-		matches = matches[:5]
+	if len(matches) > maxCandidates {
+		matches = matches[:maxCandidates]
 	}
 
-	// Save to cache asynchronously or synchronously (synchronously is fine, it's quick)
-	_ = r.store.SetLinkCache(ctx, providerName, queryKey, matches)
-
+	_ = r.cache.Set(ctx, cacheProvider, queryKey, matches)
 	return matches, nil
-}
-
-func (r *Resolver) Enrich(ctx context.Context, submissionID int64, artist, title string) error {
-	if len(r.extras) == 0 {
-		return nil
-	}
-
-	queryKey := songkey.Key(artist, title)
-	if queryKey == "" {
-		return nil
-	}
-
-	for _, p := range r.extras {
-		// Cache check
-		cached, err := r.store.GetLinkCache(ctx, p.Service(), queryKey, r.ttl)
-		var matches []Match
-
-		if err == nil && cached != nil {
-			matches = cached
-		} else {
-			if err := r.limiter.Acquire(ctx, 1); err != nil {
-				continue
-			}
-			searchCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-			m, err := p.Search(searchCtx, artist, title)
-			cancel()
-			r.limiter.Release(1)
-
-			if err == nil {
-				matches = m
-				_ = r.store.SetLinkCache(ctx, p.Service(), queryKey, matches)
-			}
-		}
-
-		// Find a high-confidence match
-		for _, m := range matches {
-			if songkey.Key(m.Artist, m.Title) == queryKey {
-				_ = r.store.AddSubmissionLink(ctx, submissionID, p.Service(), m.URL, m.ExternalID)
-				break // saved
-			}
-		}
-	}
-	return nil
 }

@@ -1,10 +1,10 @@
-// Command musicclub runs the music club server and its small admin subcommands.
+// Command musiclub runs the music club server and its small admin subcommands.
 //
-//	musicclub                                    run the server
-//	musicclub club add --slug S --name N         create a club
-//	musicclub player add --club S --name N [--admin]
+//	musiclub                                    run the server
+//	musiclub club add --slug S --name N         create a club
+//	musiclub player add --club S --name N [--admin]
 //	                                             add a player (the first admin has to come from here)
-//	musicclub healthcheck                        GET /healthz (for Docker HEALTHCHECK)
+//	musiclub healthcheck                        GET /healthz (for Docker HEALTHCHECK)
 package main
 
 import (
@@ -52,12 +52,12 @@ func run(args []string) error {
 		if len(args) >= 2 && args[1] == "add" {
 			return clubAdd(cfg, args[2:])
 		}
-		return errors.New("usage: musicclub club add --slug SLUG --name NAME")
+		return errors.New("usage: musiclub club add --slug SLUG --name NAME")
 	case "player":
 		if len(args) >= 2 && args[1] == "add" {
 			return playerAdd(cfg, args[2:])
 		}
-		return errors.New("usage: musicclub player add --club SLUG --name NAME [--admin]")
+		return errors.New("usage: musiclub player add --club SLUG --name NAME [--admin]")
 	default:
 		return fmt.Errorf("unknown command %q (try: club add, player add, healthcheck)", args[0])
 	}
@@ -73,17 +73,17 @@ func serve(cfg config.Config) error {
 	}
 	defer database.Close()
 
-	var ytProvider linkresolver.Provider
-	if cfg.YouTubeAPIKey != "" {
-		ytProvider = linkresolver.NewYouTubeProvider(cfg.YouTubeAPIKey)
+	// Link matching is optional: without headers, players paste their own links.
+	var provider linkresolver.Provider
+	if cfg.YTMusicHeadersJSON != "" {
+		if err := linkresolver.SetupYTMusic(cfg.YTMusicHeadersJSON); err != nil {
+			return err
+		}
+		provider = linkresolver.NewYTMusicProvider()
+	} else {
+		slog.Info("YTMUSIC_HEADERS_JSON not set; link matching is off")
 	}
-	var extras []linkresolver.Provider
-	if cfg.SpotifyClientID != "" && cfg.SpotifyClientSecret != "" {
-		extras = append(extras, linkresolver.NewSpotifyProvider(cfg.SpotifyClientID, cfg.SpotifyClientSecret))
-	}
-
-	linkStore := store.NewLinks(database)
-	resolver := linkresolver.NewResolver(linkStore, cfg.LinkCacheTTL, ytProvider, extras...)
+	resolver := linkresolver.NewResolver(store.NewLinkCache(database), cfg.LinkCacheTTL, provider)
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,

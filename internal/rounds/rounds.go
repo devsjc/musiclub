@@ -18,15 +18,13 @@ import (
 )
 
 const (
-	maxTheme       = 100
-	maxDescription = 500
+	maxTheme = 100
 )
 
 var (
-	ErrInvalidMonth       = errors.New("month must look like 2026-03")
-	ErrThemeRequired      = errors.New("a theme is required")
-	ErrThemeTooLong       = errors.New("the theme must be at most 100 characters")
-	ErrDescriptionTooLong = errors.New("the description must be at most 500 characters")
+	ErrInvalidMonth  = errors.New("month must look like 2026-03")
+	ErrThemeRequired = errors.New("a theme is required")
+	ErrThemeTooLong  = errors.New("the theme must be at most 100 characters")
 )
 
 type Service struct {
@@ -69,17 +67,15 @@ func (s *Service) RerollPicker(ctx context.Context, clubID, roundID int64) (doma
 }
 
 // SetTheme records the picker's theme and opens the submission window.
-func (s *Service) SetTheme(ctx context.Context, clubID, roundID, pickerID int64, theme, description string) error {
-	theme, description = strings.TrimSpace(theme), strings.TrimSpace(description)
+func (s *Service) SetTheme(ctx context.Context, clubID, roundID, pickerID int64, theme string) error {
+	theme = strings.TrimSpace(theme)
 	switch {
 	case theme == "":
 		return ErrThemeRequired
 	case utf8.RuneCountInString(theme) > maxTheme:
 		return ErrThemeTooLong
-	case utf8.RuneCountInString(description) > maxDescription:
-		return ErrDescriptionTooLong
 	}
-	return s.rounds.SetTheme(ctx, clubID, roundID, pickerID, theme, description, s.now())
+	return s.rounds.SetTheme(ctx, clubID, roundID, pickerID, theme, s.now())
 }
 
 func (s *Service) choose(ids []int64) int64 { return ids[s.intn(len(ids))] }

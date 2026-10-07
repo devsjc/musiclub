@@ -10,14 +10,12 @@ import (
 )
 
 type Config struct {
-	Port                string
-	DBPath              string
-	CookieSecret        string
-	Location            *time.Location // deadlines are interpreted in this zone
-	YouTubeAPIKey       string
-	SpotifyClientID     string
-	SpotifyClientSecret string
-	LinkCacheTTL        time.Duration
+	Port               string
+	DBPath             string
+	CookieSecret       string
+	Location           *time.Location // deadlines are interpreted in this zone
+	YTMusicHeadersJSON string         // browser headers for the YouTube Music API; empty disables link matching
+	LinkCacheTTL       time.Duration
 }
 
 // Load reads configuration from the environment. It does not require
@@ -31,13 +29,11 @@ func Load() (Config, error) {
 	}
 
 	cfg := Config{
-		Port:                getenv("PORT", "8080"),
-		DBPath:              getenv("DB_PATH", "/data/club.db"),
-		CookieSecret:        os.Getenv("COOKIE_SECRET"),
-		YouTubeAPIKey:       os.Getenv("YOUTUBE_API_KEY"),
-		SpotifyClientID:     os.Getenv("SPOTIFY_CLIENT_ID"),
-		SpotifyClientSecret: os.Getenv("SPOTIFY_CLIENT_SECRET"),
-		LinkCacheTTL:        ttl,
+		Port:               getenv("PORT", "8080"),
+		DBPath:             getenv("DB_PATH", "club.db"),
+		CookieSecret:       os.Getenv("COOKIE_SECRET"),
+		YTMusicHeadersJSON: os.Getenv("YTMUSIC_HEADERS_JSON"),
+		LinkCacheTTL:       ttl,
 	}
 
 	if _, err := strconv.ParseUint(cfg.Port, 10, 16); err != nil {

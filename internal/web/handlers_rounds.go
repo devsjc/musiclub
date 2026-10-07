@@ -338,45 +338,30 @@ func (s *Server) handleSubmission(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Read fields from either candidate matching or manual URL
-	linkSource := r.FormValue("link_source")
-	artist := r.FormValue("artist")
-	title := r.FormValue("title")
-	url := r.FormValue("url")
-	note := r.FormValue("note")
-	urlService := r.FormValue("url_service")
-	externalID := r.FormValue("external_id")
-
-	if linkSource == "matched" {
-		idx := r.FormValue("candidate_index")
-		if idx != "" {
-			url = r.FormValue("match_" + idx + "_url")
-			urlService = r.FormValue("match_" + idx + "_service")
-			externalID = r.FormValue("match_" + idx + "_extid")
-			matchArtist := r.FormValue("match_" + idx + "_artist")
-			matchTitle := r.FormValue("match_" + idx + "_title")
-			if matchArtist != "" {
-				artist = matchArtist
-			}
-			if matchTitle != "" {
-				title = matchTitle
-			}
-		}
-	} else if linkSource == "" {
-		linkSource = "manual"
-	}
-
+	// A confirmed suggestion arrives as candidate_index plus that candidate's
+	// match_<i>_* fields; a pasted link arrives as url.
 	song := rounds.Song{
-		Artist:     artist,
-		Title:      title,
-		URL:        url,
-		Note:       note,
-		LinkSource: linkSource,
-		URLService: urlService,
-		ExternalID: externalID,
+		Artist:     r.FormValue("artist"),
+		Title:      r.FormValue("title"),
+		URL:        r.FormValue("url"),
+		Note:       r.FormValue("note"),
+		LinkSource: "manual",
+	}
+	if r.FormValue("link_source") == "matched" {
+		prefix := "match_" + r.FormValue("candidate_index") + "_"
+		song.LinkSource = "matched"
+		song.URL = r.FormValue(prefix + "url")
+		song.ExternalID = r.FormValue(prefix + "extid")
+		// The service's artist and title replace what was typed (DESIGN.md §5.3).
+		if v := r.FormValue(prefix + "artist"); v != "" {
+			song.Artist = v
+		}
+		if v := r.FormValue(prefix + "title"); v != "" {
+			song.Title = v
+		}
 	}
 
-	form := songForm{Artist: artist, Title: title, URL: url, Note: note}
+	form := songForm{Artist: song.Artist, Title: song.Title, URL: song.URL, Note: song.Note}
 
 	_, err := s.roundSvc.SubmitSong(ctx, round.ClubID, round.ID, player.ID, song)
 	switch {
@@ -391,6 +376,7 @@ func (s *Server) handleSubmission(w http.ResponseWriter, r *http.Request) {
 		errors.Is(err, rounds.ErrSongFieldLong),
 		errors.Is(err, rounds.ErrSongUnreadable),
 		errors.Is(err, rounds.ErrNoteTooLong),
+		errors.Is(err, rounds.ErrMatchedLink),
 		errors.Is(err, linkresolver.ErrURLRequired),
 		errors.Is(err, linkresolver.ErrURLTooLong),
 		errors.Is(err, linkresolver.ErrURLInvalid):
@@ -413,7 +399,7 @@ func (s *Server) handleSetTheme(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := s.roundSvc.SetTheme(ctx, round.ClubID, round.ID, player.ID, r.FormValue("theme"), r.FormValue("description"))
+	err := s.roundSvc.SetTheme(ctx, round.ClubID, round.ID, player.ID, r.FormValue("theme"))
 	switch {
 	case err == nil:
 		http.Redirect(w, r, clubPath(ctx, "/rounds/"+round.Month), http.StatusSeeOther)
@@ -422,8 +408,7 @@ func (s *Server) handleSetTheme(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, store.ErrWrongPhase):
 		s.renderRound(w, r, http.StatusConflict, round, "The theme has already been set.")
 	case errors.Is(err, rounds.ErrThemeRequired),
-		errors.Is(err, rounds.ErrThemeTooLong),
-		errors.Is(err, rounds.ErrDescriptionTooLong):
+		errors.Is(err, rounds.ErrThemeTooLong):
 		s.renderRound(w, r, http.StatusUnprocessableEntity, round, err.Error())
 	default:
 		s.serverError(w, r, err)
