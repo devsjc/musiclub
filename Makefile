@@ -6,11 +6,11 @@ build:
 run:
 	DB_PATH=./club.db COOKIE_SECRET=dev-secret PORT=8080 go run ./cmd/musicclub
 
+format:
+	go fmt ./...
+
 test:
 	go test ./...
-
-vet:
-	go vet ./...
 
 docker:
 	docker build -t musicclub .

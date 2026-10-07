@@ -8,8 +8,12 @@
 {{with .Data}}
 <p><a href="/c/{{$.Club.Slug}}/rounds/{{.Month}}">{{.Month}} round</a>:
 {{if eq .Phase "theme_pending"}}{{if .ViewerIsPicker}}it's your turn to pick the theme.{{else}}waiting on {{.Picker.Name}} to pick a theme.{{end}}
+{{else if eq .Phase "submitting"}}{{.Theme}}. Submissions are open{{if .Left}} <span class="countdown">({{.Left}})</span>{{end}}.
+{{else if eq .Phase "voting"}}{{.Theme}}. Voting is open{{if .Left}} <span class="countdown">({{.Left}})</span>{{end}}.
+{{else if eq .Phase "review"}}{{.Theme}}. Voting is closed and results are coming soon.
 {{else}}{{.Theme}}{{end}}</p>
 {{else}}
-<p class="muted">No round in progress.</p>
+<p class="muted">No round in progress.{{if and $.Player $.Player.IsAdmin}} <a href="/c/{{$.Club.Slug}}/admin">Start one from the admin page.</a>{{else}} An admin will start the next one.{{end}}</p>
 {{end}}
+<p><a href="/c/{{.Club.Slug}}/stats">All-time stats</a></p>
 {{end}}

@@ -24,6 +24,8 @@
     <td>{{$bestCount}}</td>
     <td>{{$overallCount}}</td>
   </tr>
+  {{else}}
+  <tr><td colspan="4" class="muted">No songs were submitted this round.</td></tr>
   {{end}}
 </table>
 
@@ -63,6 +65,8 @@
   </li>
   {{end}}
 </ul>
+{{else}}
+<p class="muted">No winning song has any comments to feature.</p>
 {{end}}
 
 <h2>Song Keys (Duplicate Detection)</h2>
@@ -80,6 +84,8 @@
       </form>
     </td>
   </tr>
+  {{else}}
+  <tr><td colspan="3" class="muted">No songs were submitted this round.</td></tr>
   {{end}}
 </table>
 

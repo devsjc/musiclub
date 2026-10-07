@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
+	"golang.org/x/sync/semaphore"
 	"musiclub/internal/domain"
 	"musiclub/internal/songkey"
-	"golang.org/x/sync/semaphore"
 )
 
 type Match struct {
@@ -33,11 +33,11 @@ type LinkStore interface {
 }
 
 type Resolver struct {
-	primary  Provider
-	extras   []Provider
-	store    LinkStore
-	ttl      time.Duration
-	limiter  *semaphore.Weighted
+	primary Provider
+	extras  []Provider
+	store   LinkStore
+	ttl     time.Duration
+	limiter *semaphore.Weighted
 }
 
 func NewResolver(store LinkStore, cacheTTL time.Duration, primary Provider, extras ...Provider) *Resolver {
@@ -118,7 +118,7 @@ func (r *Resolver) Enrich(ctx context.Context, submissionID int64, artist, title
 			m, err := p.Search(searchCtx, artist, title)
 			cancel()
 			r.limiter.Release(1)
-			
+
 			if err == nil {
 				matches = m
 				_ = r.store.SetLinkCache(ctx, p.Service(), queryKey, matches)

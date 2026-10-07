@@ -25,7 +25,7 @@ type adminView struct {
 	Players      []domain.Player
 	Round        *roundView // the round in progress, if any
 	Submissions  []adminSubmission
-	DefaultMonth string     // pre-filled in the "start a round" form
+	DefaultMonth string // pre-filled in the "start a round" form
 }
 
 func (s *Server) renderAdmin(w http.ResponseWriter, r *http.Request, status int, msg string) {
@@ -149,6 +149,26 @@ func (s *Server) handleAdminPlayers(w http.ResponseWriter, r *http.Request) {
 		errors.Is(err, store.ErrPlayerNameTaken),
 		errors.Is(err, store.ErrLastAdmin):
 		s.renderAdmin(w, r, http.StatusUnprocessableEntity, err.Error())
+	default:
+		s.serverError(w, r, err)
+	}
+}
+
+// handleAdminAdvanceRound lets an admin force a round to advance to the next phase.
+func (s *Server) handleAdminAdvanceRound(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	club := clubFrom(ctx)
+	round, ok := s.roundByMonth(w, r)
+	if !ok {
+		return
+	}
+
+	err := s.roundSvc.AdvanceRound(ctx, club.ID, round.ID)
+	switch {
+	case err == nil:
+		http.Redirect(w, r, clubPath(ctx, "/admin"), http.StatusSeeOther)
+	case errors.Is(err, store.ErrWrongPhase):
+		s.renderAdmin(w, r, http.StatusConflict, "This round cannot be advanced.")
 	default:
 		s.serverError(w, r, err)
 	}

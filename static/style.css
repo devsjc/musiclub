@@ -16,3 +16,7 @@ ul.plain { list-style: none; padding: 0; }
 ul.plain li { margin: .5rem 0; }
 .tag { font-size: .75rem; padding: .05rem .4rem; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); }
 textarea { padding: .35rem .5rem; font: inherit; width: 100%; }
+.countdown { color: var(--muted); font-size: .9em; }
+.htmx-indicator { opacity: 0; transition: opacity 150ms ease-in; }
+.htmx-request .htmx-indicator, .htmx-request.htmx-indicator { opacity: 1; }
+td.muted { font-style: italic; }

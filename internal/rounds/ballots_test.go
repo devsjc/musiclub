@@ -48,10 +48,10 @@ func TestSubmitBallotValid(t *testing.T) {
 	ctx := context.Background()
 
 	form := url.Values{
-		"favorite_submission_id": {fmt.Sprintf("%d", subs[1].ID)}, // kit's song
-		"favorite_comment":       {"Great track"},
-		"best_fit_submission_id": {fmt.Sprintf("%d", subs[2].ID)}, // pat's song
-		"best_fit_comment":       {"Fits well"},
+		"favorite_submission_id":            {fmt.Sprintf("%d", subs[1].ID)}, // kit's song
+		"favorite_comment":                  {"Great track"},
+		"best_fit_submission_id":            {fmt.Sprintf("%d", subs[2].ID)}, // pat's song
+		"best_fit_comment":                  {"Fits well"},
 		fmt.Sprintf("guess_%d", subs[1].ID): {fmt.Sprintf("%d", kit.ID)},
 		fmt.Sprintf("guess_%d", subs[2].ID): {fmt.Sprintf("%d", pat.ID)},
 	}
@@ -75,8 +75,8 @@ func TestSubmitBallotValidation(t *testing.T) {
 
 	validForm := func() url.Values {
 		return url.Values{
-			"favorite_submission_id": {fmt.Sprintf("%d", subs[1].ID)},
-			"best_fit_submission_id": {fmt.Sprintf("%d", subs[2].ID)},
+			"favorite_submission_id":            {fmt.Sprintf("%d", subs[1].ID)},
+			"best_fit_submission_id":            {fmt.Sprintf("%d", subs[2].ID)},
 			fmt.Sprintf("guess_%d", subs[1].ID): {fmt.Sprintf("%d", kit.ID)},
 			fmt.Sprintf("guess_%d", subs[2].ID): {fmt.Sprintf("%d", pat.ID)},
 		}
@@ -135,8 +135,8 @@ func TestSubmitBallotNonSubmitterVoter(t *testing.T) {
 
 	// Non-submitter must guess all 3 submitters
 	form := url.Values{
-		"favorite_submission_id": {fmt.Sprintf("%d", subs[0].ID)},
-		"best_fit_submission_id": {fmt.Sprintf("%d", subs[1].ID)},
+		"favorite_submission_id":            {fmt.Sprintf("%d", subs[0].ID)},
+		"best_fit_submission_id":            {fmt.Sprintf("%d", subs[1].ID)},
 		fmt.Sprintf("guess_%d", subs[0].ID): {fmt.Sprintf("%d", sam.ID)},
 		fmt.Sprintf("guess_%d", subs[1].ID): {fmt.Sprintf("%d", kit.ID)},
 		fmt.Sprintf("guess_%d", subs[2].ID): {fmt.Sprintf("%d", pat.ID)},

@@ -74,6 +74,7 @@ type PlayerMatrixHeader struct {
 
 type ClubStats struct {
 	ClubID        int64
+	ClosedRounds  int // published rounds; 0 means there is nothing to show yet
 	Leaderboard   []LeaderboardRow
 	Honours       []HonourRow
 	GuessStats    GuessStats

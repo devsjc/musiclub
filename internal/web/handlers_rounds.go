@@ -20,6 +20,7 @@ type roundView struct {
 	Picker         domain.Player
 	ViewerIsPicker bool
 	SubmissionsDue string // formatted in the configured zone; empty until set
+	Left           string // time left in the current phase, e.g. "3 days left"; empty if it has no deadline
 }
 
 func (s *Server) roundView(ctx context.Context, r domain.Round) (roundView, error) {
@@ -33,6 +34,12 @@ func (s *Server) roundView(ctx context.Context, r domain.Round) (roundView, erro
 	}
 	if r.SubmissionsDueAt != nil {
 		v.SubmissionsDue = r.SubmissionsDueAt.In(s.loc).Format("Mon 2 Jan, 15:04")
+	}
+	switch {
+	case r.Phase == domain.PhaseSubmitting && r.SubmissionsDueAt != nil:
+		v.Left = countdown(time.Now(), *r.SubmissionsDueAt)
+	case r.Phase == domain.PhaseVoting && r.VotingDueAt != nil:
+		v.Left = countdown(time.Now(), *r.VotingDueAt)
 	}
 	return v, nil
 }
@@ -64,11 +71,19 @@ type submitter struct {
 	Done bool
 }
 
+// statusView is the polled "who has submitted / voted" checklist.
+type statusView struct {
+	ClubSlug string
+	Month    string
+	Phase    domain.Phase // the phase this checklist was rendered for
+	Heading  string
+	People   []submitter
+}
+
 // ballotView holds the data for the voting phase form.
 type ballotView struct {
 	Submissions []domain.Submission
 	Players     []domain.Player // submitters who can be guessed
-	Voters      []submitter     // checklist of who has voted
 	Ballot      *domain.Ballot  // nil if the viewer hasn't voted yet
 	VotingOpen  bool            // false if the deadline passed
 	VotingDue   string
@@ -78,8 +93,8 @@ type ballotView struct {
 type roundPage struct {
 	roundView
 	Form       songForm
-	SubmitOpen bool // the submitting phase is still within its deadline
-	Submitters []submitter
+	SubmitOpen bool        // the submitting phase is still within its deadline
+	Status     *statusView // checklist for the submitting and voting phases
 	BallotView *ballotView
 	Guesses    url.Values
 }
@@ -114,7 +129,7 @@ func (s *Server) renderRoundForm(w http.ResponseWriter, r *http.Request, status 
 
 	if round.Phase == domain.PhaseSubmitting {
 		view.SubmitOpen = round.SubmissionsDueAt != nil && time.Now().Before(*round.SubmissionsDueAt)
-		if view.Submitters, err = s.submitterList(ctx, round); err != nil {
+		if view.Status, err = s.statusFor(ctx, round); err != nil {
 			s.serverError(w, r, err)
 			return
 		}
@@ -162,7 +177,7 @@ func (s *Server) renderRoundForm(w http.ResponseWriter, r *http.Request, status 
 			}
 		}
 
-		if bv.Voters, err = s.voterList(ctx, round); err != nil {
+		if view.Status, err = s.statusFor(ctx, round); err != nil {
 			s.serverError(w, r, err)
 			return
 		}
@@ -179,6 +194,44 @@ func (s *Server) renderRoundForm(w http.ResponseWriter, r *http.Request, status 
 		view.BallotView = bv
 	}
 	s.render(w, r, status, "round", page{Title: round.Month, Error: msg, Data: view})
+}
+
+// statusFor builds the checklist for the round's current phase, or nil if the
+// phase has none.
+func (s *Server) statusFor(ctx context.Context, round domain.Round) (*statusView, error) {
+	v := &statusView{ClubSlug: clubFrom(ctx).Slug, Month: round.Month, Phase: round.Phase}
+	var err error
+	switch round.Phase {
+	case domain.PhaseSubmitting:
+		v.Heading = "Who has submitted"
+		v.People, err = s.submitterList(ctx, round)
+	case domain.PhaseVoting:
+		v.Heading = "Who has voted"
+		v.People, err = s.voterList(ctx, round)
+	default:
+		return nil, nil
+	}
+	return v, err
+}
+
+// handleRoundStatus serves the polled checklist. If the round has moved on from
+// the phase the page was rendered for, it tells HTMX to reload the whole page.
+func (s *Server) handleRoundStatus(w http.ResponseWriter, r *http.Request) {
+	round, ok := s.roundByMonth(w, r)
+	if !ok {
+		return
+	}
+	status, err := s.statusFor(r.Context(), round)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	if status == nil || string(round.Phase) != r.URL.Query().Get("phase") {
+		w.Header().Set("HX-Refresh", "true")
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	s.renderFragment(w, r, http.StatusOK, "status", page{Data: status})
 }
 
 // voterList is every active player in the club, ticked if they have voted.
@@ -393,7 +446,7 @@ func (s *Server) handleBallot(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	
+
 	// Create domain.Ballot from form
 	// We'll let a new rounds.Service method handle the business logic
 	err := s.roundSvc.SubmitBallot(ctx, round.ClubID, round.ID, player.ID, r.Form)
@@ -421,13 +474,13 @@ func (s *Server) handleBallotGuesses(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	
+
 	subs, err := s.submissions.List(ctx, round.ClubID, round.ID)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
 	}
-	
+
 	players, err := s.players.List(ctx, round.ClubID)
 	if err != nil {
 		s.serverError(w, r, err)
@@ -444,7 +497,7 @@ func (s *Server) handleBallotGuesses(w http.ResponseWriter, r *http.Request) {
 			guessPlayers = append(guessPlayers, p)
 		}
 	}
-	
+
 	_ = r.ParseForm()
 	view := roundPage{
 		roundView:  roundView{Round: round},

@@ -59,7 +59,7 @@ func TestSubmissionsCreateAndDuplicateError(t *testing.T) {
 	s.Title, s.Note = "Retitled", ""
 	_, err = e.subs.Create(ctx, e.club.ID, e.round.ID, e.sam.ID, s, t0.Add(time.Hour))
 	require.ErrorIs(t, err, ErrAlreadySubmitted)
-	
+
 	// Check it was not overwritten
 	got2, err := e.subs.ByPlayer(ctx, e.club.ID, e.round.ID, e.sam.ID)
 	require.NoError(t, err)
@@ -80,7 +80,7 @@ func TestSubmissionsDelete(t *testing.T) {
 	// Delete
 	err = e.subs.Delete(ctx, e.club.ID, e.round.ID, got.ID)
 	require.NoError(t, err)
-	
+
 	// Check it's gone
 	_, err = e.subs.ByPlayer(ctx, e.club.ID, e.round.ID, e.sam.ID)
 	require.ErrorIs(t, err, ErrNotFound)

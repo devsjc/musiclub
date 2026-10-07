@@ -54,6 +54,8 @@
     {{if .Submission.Note}}<br><span class="muted">"{{.Submission.Note}}"</span>{{end}}
     <br><a href="{{.Submission.URL}}" target="_blank" rel="noopener noreferrer nofollow">Listen</a>
   </li>
+  {{else}}
+  <li class="muted">Nobody submitted a song this round.</li>
   {{end}}
 </ul>
 
@@ -93,6 +95,8 @@
       <td>{{.BestFitWins}}</td>
       <td>{{.Trendsetter}}</td>
     </tr>
+    {{else}}
+    <tr><td colspan="7" class="muted">No points were scored.</td></tr>
     {{end}}
   </tbody>
 </table>
@@ -108,6 +112,8 @@
       <tbody>
         {{range .Data.Summary.GuessStats.BySubmitter}}
         <tr><td>{{.Name}}</td><td>{{printf "%.1f" .Pct}}% ({{.Correct}}/{{.Total}})</td></tr>
+        {{else}}
+        <tr><td colspan="2" class="muted">No guesses were made.</td></tr>
         {{end}}
       </tbody>
     </table>
@@ -119,6 +125,8 @@
       <tbody>
         {{range .Data.Summary.GuessStats.ByGuesser}}
         <tr><td>{{.Name}}</td><td>{{printf "%.1f" .Pct}}% ({{.Correct}}/{{.Total}})</td></tr>
+        {{else}}
+        <tr><td colspan="2" class="muted">No guesses were made.</td></tr>
         {{end}}
       </tbody>
     </table>

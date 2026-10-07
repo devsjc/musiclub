@@ -1,0 +1,15 @@
+{{define "status_fragment"}}
+<div id="status" hx-get="/c/{{.ClubSlug}}/rounds/{{.Month}}/status?phase={{.Phase}}" hx-trigger="every 30s" hx-swap="outerHTML">
+  <h2>{{.Heading}}</h2>
+  {{if .People}}
+  <ul class="plain">
+    {{range .People}}<li>{{if .Done}}✓{{else}}<span class="muted">…</span>{{end}} {{.Name}}</li>
+    {{end}}
+  </ul>
+  {{else}}
+  <p class="muted">This club has no players yet.</p>
+  {{end}}
+</div>
+{{end}}
+
+{{define "status"}}{{template "status_fragment" .Data}}{{end}}

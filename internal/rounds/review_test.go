@@ -19,10 +19,10 @@ func reviewRound(t *testing.T) (*Service, domain.Club, domain.Round, domain.Play
 	// Cast ballots so subs[1] wins favorite and subs[2] wins best fit
 	// sam votes for subs[1] (fav) and subs[2] (best fit)
 	formSam := url.Values{
-		"favorite_submission_id": {fmt.Sprintf("%d", subs[1].ID)},
-		"favorite_comment":       {"Sam loves Kit's song"},
-		"best_fit_submission_id": {fmt.Sprintf("%d", subs[2].ID)},
-		"best_fit_comment":       {"Sam thinks Pat fits best"},
+		"favorite_submission_id":            {fmt.Sprintf("%d", subs[1].ID)},
+		"favorite_comment":                  {"Sam loves Kit's song"},
+		"best_fit_submission_id":            {fmt.Sprintf("%d", subs[2].ID)},
+		"best_fit_comment":                  {"Sam thinks Pat fits best"},
 		fmt.Sprintf("guess_%d", subs[1].ID): {fmt.Sprintf("%d", kit.ID)},
 		fmt.Sprintf("guess_%d", subs[2].ID): {fmt.Sprintf("%d", pat.ID)},
 	}
@@ -30,10 +30,10 @@ func reviewRound(t *testing.T) (*Service, domain.Club, domain.Round, domain.Play
 
 	// kit votes for subs[1] (fav) and subs[2] (best fit)
 	formKit := url.Values{
-		"favorite_submission_id": {fmt.Sprintf("%d", subs[0].ID)},
-		"favorite_comment":       {"Kit likes Sam's song"},
-		"best_fit_submission_id": {fmt.Sprintf("%d", subs[2].ID)},
-		"best_fit_comment":       {"Kit thinks Pat fits best"},
+		"favorite_submission_id":            {fmt.Sprintf("%d", subs[0].ID)},
+		"favorite_comment":                  {"Kit likes Sam's song"},
+		"best_fit_submission_id":            {fmt.Sprintf("%d", subs[2].ID)},
+		"best_fit_comment":                  {"Kit thinks Pat fits best"},
 		fmt.Sprintf("guess_%d", subs[0].ID): {fmt.Sprintf("%d", sam.ID)},
 		fmt.Sprintf("guess_%d", subs[2].ID): {fmt.Sprintf("%d", pat.ID)},
 	}

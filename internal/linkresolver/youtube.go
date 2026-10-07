@@ -31,8 +31,8 @@ func (p *YouTubeProvider) Search(ctx context.Context, artist, title string) ([]M
 	}
 
 	q := fmt.Sprintf("%s %s", artist, title)
-	
-	reqURL := fmt.Sprintf("https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoCategoryId=10&maxResults=5&q=%s&key=%s", 
+
+	reqURL := fmt.Sprintf("https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoCategoryId=10&maxResults=5&q=%s&key=%s",
 		url.QueryEscape(q), url.QueryEscape(p.apiKey))
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
@@ -84,7 +84,7 @@ func (p *YouTubeProvider) Search(ctx context.Context, artist, title string) ([]M
 		if len(artistName) > 8 && artistName[len(artistName)-8:] == " - Topic" {
 			artistName = artistName[:len(artistName)-8]
 		}
-		
+
 		matches = append(matches, Match{
 			Service:    YouTubeMusic,
 			ExternalID: item.Id.VideoId,

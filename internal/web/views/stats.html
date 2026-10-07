@@ -5,6 +5,9 @@
 
 <h1>{{.Club.Name}} All-Time Stats</h1>
 
+{{if not .Data.ClubStats.ClosedRounds}}
+<p class="muted">No rounds have been published yet. Stats appear here once the first round closes.</p>
+{{else}}
 <h2>Leaderboard</h2>
 <table>
   <thead>
@@ -61,6 +64,8 @@
       <tbody>
         {{range .Data.ClubStats.GuessStats.BySubmitter}}
         <tr><td>{{.Name}}</td><td>{{printf "%.1f" .Pct}}%</td></tr>
+        {{else}}
+        <tr><td colspan="2" class="muted">No guesses yet.</td></tr>
         {{end}}
       </tbody>
     </table>
@@ -72,6 +77,8 @@
       <tbody>
         {{range .Data.ClubStats.GuessStats.ByGuesser}}
         <tr><td>{{.Name}}</td><td>{{printf "%.1f" .Pct}}%</td></tr>
+        {{else}}
+        <tr><td colspan="2" class="muted">No guesses yet.</td></tr>
         {{end}}
       </tbody>
     </table>
@@ -107,4 +114,5 @@
     </tbody>
   </table>
 </div>
+{{end}}
 {{end}}

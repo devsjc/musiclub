@@ -119,7 +119,7 @@ func (p *SpotifyProvider) Search(ctx context.Context, artist, title string) ([]M
 						Url string `json:"url"`
 					} `json:"images"`
 				} `json:"album"`
-				DurationMs int `json:"duration_ms"`
+				DurationMs   int `json:"duration_ms"`
 				ExternalUrls struct {
 					Spotify string `json:"spotify"`
 				} `json:"external_urls"`
@@ -137,7 +137,7 @@ func (p *SpotifyProvider) Search(ctx context.Context, artist, title string) ([]M
 		if len(item.Artists) > 0 {
 			artistName = item.Artists[0].Name
 		}
-		
+
 		var thumb string
 		if len(item.Album.Images) > 0 {
 			thumb = item.Album.Images[len(item.Album.Images)-1].Url // Use smallest image

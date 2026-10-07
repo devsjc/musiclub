@@ -9,6 +9,11 @@ func (s *Store) ClubStats(ctx context.Context, clubID int64) (ClubStats, error) 
 	var cs ClubStats
 	cs.ClubID = clubID
 
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM rounds WHERE club_id = ? AND phase = 'closed'`, clubID).Scan(&cs.ClosedRounds); err != nil {
+		return cs, err
+	}
+
 	// Active and historical players
 	qP := `SELECT id, name FROM players WHERE club_id = ? ORDER BY name`
 	rowsP, err := s.db.QueryContext(ctx, qP, clubID)

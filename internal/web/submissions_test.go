@@ -64,7 +64,7 @@ func TestSubmissionFlow(t *testing.T) {
 	require.NotContains(t, body, `name="artist"`, "form is hidden after submitting")
 	require.Contains(t, body, "Queen — Radio Ga Ga")
 	require.Contains(t, body, "✓ sam")
-	
+
 	other := e.do("GET", page, &kit, c, nil).Body.String()
 	require.Contains(t, other, "✓ sam")
 	require.NotContains(t, other, "✓ kit", "checklist should tick only sam")
@@ -130,10 +130,10 @@ func TestAdminDeleteSubmission(t *testing.T) {
 	e := newEnv(t)
 	c, sam, kit := submittingClub(t, e, "friends")
 	page := "/c/friends/rounds/2026-03"
-	
+
 	// kit submits
 	wantStatus(t, e.do("POST", page+"/submission", &kit, c, songValues("Queen", "Radio Ga Ga", "https://example.com/x")), http.StatusSeeOther)
-	
+
 	// find the submission ID
 	round, err := e.rounds.ByMonth(context.Background(), c.ID, "2026-03")
 	require.NoError(t, err)
@@ -141,13 +141,13 @@ func TestAdminDeleteSubmission(t *testing.T) {
 	require.NoError(t, err)
 
 	delURL := "/c/friends/admin/rounds/2026-03/submissions/" + strconv.FormatInt(sub.ID, 10) + "/delete"
-	
+
 	// kit cannot delete (not admin)
 	wantStatus(t, e.do("POST", delURL, &kit, c, nil), http.StatusForbidden)
-	
+
 	// sam (admin) deletes
 	wantStatus(t, e.do("POST", delURL, &sam, c, nil), http.StatusSeeOther)
-	
+
 	// kit can submit again
 	wantStatus(t, e.do("POST", page+"/submission", &kit, c, songValues("David Bowie", "Heroes", "https://example.com/y")), http.StatusSeeOther)
 }

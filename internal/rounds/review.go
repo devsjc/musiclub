@@ -22,12 +22,12 @@ type CandidateComment struct {
 }
 
 type ReviewData struct {
-	Round          domain.Round
-	Submissions    []domain.Submission
-	Tallies        scoring.Tallies
-	WinningSubs    map[int64]domain.Submission
+	Round           domain.Round
+	Submissions     []domain.Submission
+	Tallies         scoring.Tallies
+	WinningSubs     map[int64]domain.Submission
 	CandidateQuotes []CandidateComment
-	FeaturedQuotes []domain.FeaturedQuote
+	FeaturedQuotes  []domain.FeaturedQuote
 }
 
 func (s *Service) Review(ctx context.Context, clubID, roundID int64) (ReviewData, error) {
@@ -102,12 +102,12 @@ func (s *Service) Review(ctx context.Context, clubID, roundID int64) (ReviewData
 	}
 
 	return ReviewData{
-		Round:          r,
-		Submissions:    subs,
-		Tallies:        tallies,
-		WinningSubs:    winningSubs,
+		Round:           r,
+		Submissions:     subs,
+		Tallies:         tallies,
+		WinningSubs:     winningSubs,
 		CandidateQuotes: candidates,
-		FeaturedQuotes: featured,
+		FeaturedQuotes:  featured,
 	}, nil
 }
 

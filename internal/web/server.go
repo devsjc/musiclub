@@ -55,6 +55,7 @@ func NewServer(db *sql.DB, cookieSecret string, loc *time.Location, resolver *li
 
 	s.mux.Handle("GET /c/{club}/rounds/{month}", s.clubRoute(s.handleRound))
 	s.mux.Handle("GET /c/{club}/rounds/{month}/results", s.clubRoute(s.handleRoundResults))
+	s.mux.Handle("GET /c/{club}/rounds/{month}/status", s.clubRoute(s.handleRoundStatus))
 	s.mux.Handle("GET /c/{club}/stats", s.clubRoute(s.handleClubStats))
 	s.mux.Handle("GET /c/{club}/stats/players/{id}", s.clubRoute(s.handlePlayerStats))
 	s.mux.Handle("GET /c/{club}/rounds/{month}/ballot-guesses", s.clubRoute(s.handleBallotGuesses))
@@ -68,6 +69,7 @@ func NewServer(db *sql.DB, cookieSecret string, loc *time.Location, resolver *li
 	s.mux.Handle("POST /c/{club}/admin/players", s.adminRoute(s.handleAdminPlayers))
 	s.mux.Handle("POST /c/{club}/admin/rounds", s.adminRoute(s.handleAdminStartRound))
 	s.mux.Handle("POST /c/{club}/admin/rounds/{month}/reroll", s.adminRoute(s.handleAdminReroll))
+	s.mux.Handle("POST /c/{club}/admin/rounds/{month}/advance", s.adminRoute(s.handleAdminAdvanceRound))
 	s.mux.Handle("POST /c/{club}/admin/rounds/{month}/submissions/{id}/delete", s.adminRoute(s.handleAdminDeleteSubmission))
 	s.mux.Handle("GET /c/{club}/admin/rounds/{month}/review", s.adminRoute(s.handleAdminReview))
 	s.mux.Handle("POST /c/{club}/admin/rounds/{month}/song-keys", s.adminRoute(s.handleAdminSongKeys))

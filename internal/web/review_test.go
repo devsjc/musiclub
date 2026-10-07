@@ -19,20 +19,20 @@ func reviewClub(t *testing.T, e *env, slug string) (domain.Club, domain.Player, 
 	// Cast votes
 	page := "/c/" + slug + "/rounds/2026-03"
 	formSam := url.Values{
-		"favorite_submission_id": {fmt.Sprintf("%d", subs[1].ID)},
-		"favorite_comment":       {"Best song ever"},
-		"best_fit_submission_id": {fmt.Sprintf("%d", subs[2].ID)},
-		"best_fit_comment":       {"Perfect theme fit"},
+		"favorite_submission_id":            {fmt.Sprintf("%d", subs[1].ID)},
+		"favorite_comment":                  {"Best song ever"},
+		"best_fit_submission_id":            {fmt.Sprintf("%d", subs[2].ID)},
+		"best_fit_comment":                  {"Perfect theme fit"},
 		fmt.Sprintf("guess_%d", subs[1].ID): {fmt.Sprintf("%d", kit.ID)},
 		fmt.Sprintf("guess_%d", subs[2].ID): {fmt.Sprintf("%d", pat.ID)},
 	}
 	wantStatus(t, e.do("POST", page+"/ballot", &sam, c, formSam), http.StatusSeeOther)
 
 	formKit := url.Values{
-		"favorite_submission_id": {fmt.Sprintf("%d", subs[0].ID)},
-		"favorite_comment":       {"Kit likes Sam's song"},
-		"best_fit_submission_id": {fmt.Sprintf("%d", subs[2].ID)},
-		"best_fit_comment":       {"Kit also agrees on song 3"},
+		"favorite_submission_id":            {fmt.Sprintf("%d", subs[0].ID)},
+		"favorite_comment":                  {"Kit likes Sam's song"},
+		"best_fit_submission_id":            {fmt.Sprintf("%d", subs[2].ID)},
+		"best_fit_comment":                  {"Kit also agrees on song 3"},
 		fmt.Sprintf("guess_%d", subs[0].ID): {fmt.Sprintf("%d", sam.ID)},
 		fmt.Sprintf("guess_%d", subs[2].ID): {fmt.Sprintf("%d", pat.ID)},
 	}

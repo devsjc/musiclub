@@ -89,3 +89,9 @@ func (s *Service) choose(ids []int64) int64 { return ids[s.intn(len(ids))] }
 func (s *Service) Tick(ctx context.Context, now time.Time) error {
 	return s.rounds.AdvancePhases(ctx, now, s.shuffle)
 }
+
+// AdvanceRound lets an admin immediately advance a round's phase
+// (submitting -> voting or voting -> review).
+func (s *Service) AdvanceRound(ctx context.Context, clubID, roundID int64) error {
+	return s.rounds.ForceAdvance(ctx, clubID, roundID, s.now(), s.shuffle)
+}

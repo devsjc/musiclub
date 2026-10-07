@@ -17,7 +17,7 @@
   {{if .ThemeDescription}}<p>{{.ThemeDescription}}</p>{{end}}
   <p class="muted">Picked by {{.Picker.Name}}.</p>
   {{if eq .Phase "submitting"}}
-  {{if .SubmitOpen}}<p>Submissions open until {{.SubmissionsDue}}.</p>{{else}}<p>Submissions closed at {{.SubmissionsDue}}.</p>{{end}}
+  {{if .SubmitOpen}}<p>Submissions open until {{.SubmissionsDue}} <span class="countdown">({{.Left}})</span>.</p>{{else}}<p>Submissions closed at {{.SubmissionsDue}}.</p>{{end}}
   {{if $.Player}}
     <h2>Your song</h2>
     {{if and .SubmitOpen (not .Form.Saved)}}
@@ -50,15 +50,14 @@
   {{else}}
     <p><a href="/c/{{$.Club.Slug}}/whoami">Tell us who you are</a> to submit a song.</p>
   {{end}}
-  <h2>Who has submitted</h2>
-  <ul class="plain">
-    {{range .Submitters}}<li>{{if .Done}}✓{{else}}<span class="muted">…</span>{{end}} {{.Name}}</li>
-    {{end}}
-  </ul>
+  {{template "status_fragment" .Status}}
   {{else if eq .Phase "voting"}}
-  {{if .BallotView.VotingOpen}}<p>Voting open until {{.BallotView.VotingDue}}.</p>{{else}}<p>Voting closed at {{.BallotView.VotingDue}}.</p>{{end}}
+  {{if .BallotView.VotingOpen}}<p>Voting open until {{.BallotView.VotingDue}} <span class="countdown">({{.Left}})</span>.</p>{{else}}<p>Voting closed at {{.BallotView.VotingDue}}.</p>{{end}}
   
   <h2>Songs</h2>
+  {{if not .BallotView.Submissions}}
+  <p class="muted">Nobody submitted a song this round, so there is nothing to vote on.</p>
+  {{else}}
   <ul class="plain">
     {{range .BallotView.Submissions}}
     <li>
@@ -71,8 +70,9 @@
     </li>
     {{end}}
   </ul>
+  {{end}}
 
-  {{if $.Player}}
+  {{if and $.Player .BallotView.Submissions}}
     <h2>Your ballot</h2>
     {{if and .BallotView.VotingOpen (not .BallotView.Ballot)}}
     <form method="post" action="/c/{{$.Club.Slug}}/rounds/{{.Month}}/ballot">
@@ -108,15 +108,11 @@
     {{else}}
     <p class="muted">You didn't vote.</p>
     {{end}}
-  {{else}}
+  {{else if not $.Player}}
     <p><a href="/c/{{$.Club.Slug}}/whoami">Tell us who you are</a> to vote.</p>
   {{end}}
 
-  <h2>Who has voted</h2>
-  <ul class="plain">
-    {{range .BallotView.Voters}}<li>{{if .Done}}✓{{else}}<span class="muted">…</span>{{end}} {{.Name}}</li>
-    {{end}}
-  </ul>
+  {{template "status_fragment" .Status}}
   {{else if eq .Phase "review"}}
   <p>Voting is closed. Results are coming soon.</p>
   {{if $.Player}}{{if $.Player.IsAdmin}}

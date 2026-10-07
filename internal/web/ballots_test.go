@@ -94,10 +94,10 @@ func TestBallotSubmissionFlow(t *testing.T) {
 	page := "/c/friends/rounds/2026-03"
 
 	ballotForm := url.Values{
-		"favorite_submission_id": {fmt.Sprintf("%d", subs[1].ID)},
-		"favorite_comment":       {"Love this song"},
-		"best_fit_submission_id": {fmt.Sprintf("%d", subs[2].ID)},
-		"best_fit_comment":       {"Fits the rainy theme"},
+		"favorite_submission_id":            {fmt.Sprintf("%d", subs[1].ID)},
+		"favorite_comment":                  {"Love this song"},
+		"best_fit_submission_id":            {fmt.Sprintf("%d", subs[2].ID)},
+		"best_fit_comment":                  {"Fits the rainy theme"},
 		fmt.Sprintf("guess_%d", subs[1].ID): {fmt.Sprintf("%d", kit.ID)},
 		fmt.Sprintf("guess_%d", subs[2].ID): {fmt.Sprintf("%d", pat.ID)},
 	}
@@ -122,8 +122,8 @@ func TestBallotSubmissionFlow(t *testing.T) {
 
 	// Invalid ballot is rejected
 	invalidForm := url.Values{
-		"favorite_submission_id": {fmt.Sprintf("%d", subs[1].ID)},
-		"best_fit_submission_id": {fmt.Sprintf("%d", subs[1].ID)}, // same!
+		"favorite_submission_id":            {fmt.Sprintf("%d", subs[1].ID)},
+		"best_fit_submission_id":            {fmt.Sprintf("%d", subs[1].ID)}, // same!
 		fmt.Sprintf("guess_%d", subs[1].ID): {fmt.Sprintf("%d", kit.ID)},
 		fmt.Sprintf("guess_%d", subs[2].ID): {fmt.Sprintf("%d", pat.ID)},
 	}
