@@ -1,0 +1,38 @@
+{{define "content"}}
+<nav class="breadcrumbs">
+  <a href="/c/{{.Club.Slug}}/stats">← All-Time Stats</a>
+</nav>
+
+{{with .Data.Profile}}
+<h1>Stats: {{.Player.Name}}</h1>
+
+<h2>Overview</h2>
+<p>
+  <strong>Total Points:</strong> {{.TotalPoints}}<br>
+  <strong>Rounds Played:</strong> {{.RoundsPlayed}}
+</p>
+
+<h2>Honours</h2>
+<table class="compact">
+  <tr><th>Best Song Wins</th><td>{{.Honours.FavoriteWins}}</td></tr>
+  <tr><th>Best Fit Wins</th><td>{{.Honours.BestFitWins}}</td></tr>
+  <tr><th>Overall Wins</th><td>{{.Honours.OverallWins}}</td></tr>
+  <tr><th>Trendsetter Points</th><td>{{.Honours.Trendsetter}}</td></tr>
+</table>
+
+<h2>Songs Submitted</h2>
+{{if .Songs}}
+<ul class="plain">
+  {{range .Songs}}
+  <li>
+    <strong>{{.Artist}} — {{.Title}}</strong> ({{.Month}})<br>
+    <a href="{{.URL}}" target="_blank" rel="noopener noreferrer nofollow">Listen</a>
+  </li>
+  {{end}}
+</ul>
+{{else}}
+<p class="muted">No songs submitted in closed rounds yet.</p>
+{{end}}
+
+{{end}}
+{{end}}

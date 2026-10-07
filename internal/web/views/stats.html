@@ -1,0 +1,110 @@
+{{define "content"}}
+<nav class="breadcrumbs">
+  <a href="/c/{{.Club.Slug}}">← Current round</a>
+</nav>
+
+<h1>{{.Club.Name}} All-Time Stats</h1>
+
+<h2>Leaderboard</h2>
+<table>
+  <thead>
+    <tr>
+      <th>Player</th>
+      <th>Total Points</th>
+      <th>Rounds Played</th>
+      <th>Avg Per Round</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{range .Data.ClubStats.Leaderboard}}
+    <tr>
+      <td><a href="/c/{{$.Club.Slug}}/stats/players/{{.PlayerID}}">{{.Name}}</a></td>
+      <td><strong>{{.TotalPoints}}</strong></td>
+      <td>{{.RoundsPlayed}}</td>
+      <td>{{printf "%.1f" .AvgPerRound}}</td>
+    </tr>
+    {{end}}
+  </tbody>
+</table>
+
+<h2>Honours</h2>
+<table>
+  <thead>
+    <tr>
+      <th>Player</th>
+      <th>Best Song Wins</th>
+      <th>Best Fit Wins</th>
+      <th>Overall Wins</th>
+      <th>Trendsetter Points</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{range .Data.ClubStats.Honours}}
+    <tr>
+      <td><a href="/c/{{$.Club.Slug}}/stats/players/{{.PlayerID}}">{{.Name}}</a></td>
+      <td>{{.FavoriteWins}}</td>
+      <td>{{.BestFitWins}}</td>
+      <td>{{.OverallWins}}</td>
+      <td>{{.Trendsetter}}</td>
+    </tr>
+    {{end}}
+  </tbody>
+</table>
+
+<h2>Guessing Stats</h2>
+<p>Overall correct guesses across all rounds: <strong>{{printf "%.1f" .Data.ClubStats.GuessStats.OverallCorrectPct}}%</strong></p>
+<div class="guesses-layout" style="display: flex; gap: 2rem;">
+  <div>
+    <h3>Most Guessable</h3>
+    <table>
+      <thead><tr><th>Submitter</th><th>Correct %</th></tr></thead>
+      <tbody>
+        {{range .Data.ClubStats.GuessStats.BySubmitter}}
+        <tr><td>{{.Name}}</td><td>{{printf "%.1f" .Pct}}%</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+  <div>
+    <h3>Best Guessers</h3>
+    <table>
+      <thead><tr><th>Guesser</th><th>Correct %</th></tr></thead>
+      <tbody>
+        {{range .Data.ClubStats.GuessStats.ByGuesser}}
+        <tr><td>{{.Name}}</td><td>{{printf "%.1f" .Pct}}%</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<h2>Guess Matrix</h2>
+<p class="muted">How often row guessed column correctly.</p>
+<div style="overflow-x: auto;">
+  <table class="matrix">
+    <thead>
+      <tr>
+        <th>Guesser \ Submitter</th>
+        {{range .Data.ClubStats.MatrixPlayers}}
+        <th>{{.Name}}</th>
+        {{end}}
+      </tr>
+    </thead>
+    <tbody>
+      {{range $row := .Data.ClubStats.MatrixPlayers}}
+      <tr>
+        <th>{{$row.Name}}</th>
+        {{range $col := $.Data.ClubStats.MatrixPlayers}}
+          {{if eq $row.ID $col.ID}}
+          <td style="background: #eee;">-</td>
+          {{else}}
+          {{$map := index $.Data.ClubStats.GuessMatrix $row.ID}}
+          <td title="{{$row.Name}} guessing {{$col.Name}}">{{if $map}}{{printf "%.0f" (index $map $col.ID)}}{{else}}0{{end}}%</td>
+          {{end}}
+        {{end}}
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+</div>
+{{end}}

@@ -84,8 +84,13 @@ type roundPage struct {
 }
 
 func (s *Server) handleRound(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	round, ok := s.roundByMonth(w, r)
 	if !ok {
+		return
+	}
+	if round.Phase == domain.PhaseClosed {
+		http.Redirect(w, r, clubPath(ctx, "/rounds/"+round.Month+"/results"), http.StatusSeeOther)
 		return
 	}
 	s.renderRound(w, r, http.StatusOK, round, "")

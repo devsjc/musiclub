@@ -1,0 +1,129 @@
+{{define "content"}}
+<nav class="breadcrumbs">
+  <a href="/c/{{.Club.Slug}}">← Current round</a>
+</nav>
+
+<h1>Results: {{.Data.Round.Month}}</h1>
+{{if .Data.Round.Theme}}
+  <p><strong>Theme:</strong> {{.Data.Round.Theme}}</p>
+  {{if .Data.Round.ThemeDescription}}<p>{{.Data.Round.ThemeDescription}}</p>{{end}}
+{{end}}
+
+<h2>Winners</h2>
+<div class="winners-list">
+  <h3>Best Song</h3>
+  {{if .Data.Summary.Winners.Favorite}}
+    <ul>
+    {{range .Data.Summary.Winners.Favorite}}
+      <li><strong>{{.Submission.Artist}} — {{.Submission.Title}}</strong> (submitted by {{.SubmitterName}}) — {{.Votes}} votes</li>
+    {{end}}
+    </ul>
+  {{else}}
+    <p class="muted">No votes cast.</p>
+  {{end}}
+
+  <h3>Best Theme Fit</h3>
+  {{if .Data.Summary.Winners.BestFit}}
+    <ul>
+    {{range .Data.Summary.Winners.BestFit}}
+      <li><strong>{{.Submission.Artist}} — {{.Submission.Title}}</strong> (submitted by {{.SubmitterName}}) — {{.Votes}} votes</li>
+    {{end}}
+    </ul>
+  {{else}}
+    <p class="muted">No votes cast.</p>
+  {{end}}
+
+  <h3>Overall</h3>
+  {{if .Data.Summary.Winners.Overall}}
+    <ul>
+    {{range .Data.Summary.Winners.Overall}}
+      <li><strong>{{.Submission.Artist}} — {{.Submission.Title}}</strong> (submitted by {{.SubmitterName}}) — {{.Votes}} votes</li>
+    {{end}}
+    </ul>
+  {{else}}
+    <p class="muted">No votes cast.</p>
+  {{end}}
+</div>
+
+<h2>All Songs</h2>
+<ul class="plain">
+  {{range .Data.Summary.Songs}}
+  <li>
+    <strong>{{.Submission.Artist}} — {{.Submission.Title}}</strong>
+    <span class="muted">(submitted by {{.SubmitterName}})</span>
+    {{if .Submission.Note}}<br><span class="muted">"{{.Submission.Note}}"</span>{{end}}
+    <br><a href="{{.Submission.URL}}" target="_blank" rel="noopener noreferrer nofollow">Listen</a>
+  </li>
+  {{end}}
+</ul>
+
+{{if .Data.Summary.FeaturedQuotes}}
+<h2>Featured Quotes</h2>
+<ul>
+{{range .Data.Summary.FeaturedQuotes}}
+  <li>
+    <blockquote>"{{.Quote.Quote}}"</blockquote>
+    <cite>— {{if .VoterName}}{{.VoterName}}{{else}}Anonymous{{end}} on <strong>{{if eq .Quote.Category "favorite"}}Best Song{{else}}Best Theme Fit{{end}}</strong></cite>
+  </li>
+{{end}}
+</ul>
+{{end}}
+
+<h2>Points Breakdown</h2>
+<table>
+  <thead>
+    <tr>
+      <th>Player</th>
+      <th>Total</th>
+      <th>Fav Votes</th>
+      <th>Fit Votes</th>
+      <th>Fav Win</th>
+      <th>Fit Win</th>
+      <th>Trendsetter</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{range .Data.Summary.PlayerPoints}}
+    <tr>
+      <td><a href="/c/{{$.Club.Slug}}/stats/players/{{.PlayerID}}">{{.Name}}</a></td>
+      <td><strong>{{.Total}}</strong></td>
+      <td>{{.FavoriteVotes}}</td>
+      <td>{{.BestFitVotes}}</td>
+      <td>{{.FavoriteWins}}</td>
+      <td>{{.BestFitWins}}</td>
+      <td>{{.Trendsetter}}</td>
+    </tr>
+    {{end}}
+  </tbody>
+</table>
+
+<h2>Guessing Stats</h2>
+<p>Overall correct guesses: <strong>{{printf "%.1f" .Data.Summary.GuessStats.OverallCorrectPct}}%</strong></p>
+
+<div class="guesses-layout" style="display: flex; gap: 2rem;">
+  <div>
+    <h3>Easiest to Guess</h3>
+    <table>
+      <thead><tr><th>Submitter</th><th>Correct %</th></tr></thead>
+      <tbody>
+        {{range .Data.Summary.GuessStats.BySubmitter}}
+        <tr><td>{{.Name}}</td><td>{{printf "%.1f" .Pct}}% ({{.Correct}}/{{.Total}})</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+  <div>
+    <h3>Best Guessers</h3>
+    <table>
+      <thead><tr><th>Guesser</th><th>Correct %</th></tr></thead>
+      <tbody>
+        {{range .Data.Summary.GuessStats.ByGuesser}}
+        <tr><td>{{.Name}}</td><td>{{printf "%.1f" .Pct}}% ({{.Correct}}/{{.Total}})</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<p><a href="/c/{{.Club.Slug}}/stats">View All-Time Stats &rarr;</a></p>
+{{end}}

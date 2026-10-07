@@ -25,7 +25,7 @@ type page struct {
 // parseViews builds one template set per page (layout + page), so each page can
 // define its own "content" block.
 func parseViews() map[string]*template.Template {
-	names := []string{"index", "home", "whoami", "admin", "round", "error", "review"}
+	names := []string{"index", "home", "whoami", "admin", "round", "error", "review", "results", "stats", "player_stats"}
 	out := make(map[string]*template.Template, len(names))
 	for _, n := range names {
 		// Include all fragment files

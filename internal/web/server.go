@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"musiclub/internal/rounds"
+	"musiclub/internal/stats"
 	"musiclub/internal/store"
 	"musiclub/static"
 )
@@ -20,6 +21,7 @@ type Server struct {
 	submissions *store.Submissions
 	ballots     *store.Ballots
 	roundSvc    *rounds.Service
+	stats       *stats.Store
 	loc         *time.Location // zone for showing deadlines and choosing the default month
 	sessions    sessions
 	views       map[string]*template.Template
@@ -35,6 +37,7 @@ func NewServer(db *sql.DB, cookieSecret string, loc *time.Location) *Server {
 		submissions: store.NewSubmissions(db),
 		ballots:     store.NewBallots(db),
 		roundSvc:    rounds.New(db),
+		stats:       stats.NewStore(db),
 		loc:         loc,
 		sessions:    sessions{secret: []byte(cookieSecret)},
 		views:       parseViews(),
@@ -50,6 +53,9 @@ func NewServer(db *sql.DB, cookieSecret string, loc *time.Location) *Server {
 	s.mux.Handle("POST /c/{club}/whoami", s.clubRoute(s.handleSetWhoami))
 
 	s.mux.Handle("GET /c/{club}/rounds/{month}", s.clubRoute(s.handleRound))
+	s.mux.Handle("GET /c/{club}/rounds/{month}/results", s.clubRoute(s.handleRoundResults))
+	s.mux.Handle("GET /c/{club}/stats", s.clubRoute(s.handleClubStats))
+	s.mux.Handle("GET /c/{club}/stats/players/{id}", s.clubRoute(s.handlePlayerStats))
 	s.mux.Handle("GET /c/{club}/rounds/{month}/ballot-guesses", s.clubRoute(s.handleBallotGuesses))
 	s.mux.Handle("POST /c/{club}/rounds/{month}/theme", s.clubRoute(s.handleSetTheme))
 	s.mux.Handle("POST /c/{club}/rounds/{month}/submission", s.clubRoute(s.handleSubmission))
