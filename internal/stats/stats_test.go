@@ -32,7 +32,7 @@ func setupClosedRound(t *testing.T) (*Store, *rounds.Service, domain.Club, domai
 	pat, err := players.Create(ctx, club.ID, "Pat", false)
 	require.NoError(t, err)
 
-	svc := rounds.New(database)
+	svc := rounds.New(database, nil)
 
 	// Round
 	r, err := svc.StartRound(ctx, club.ID, "2026-03")

@@ -112,7 +112,35 @@ func (s *Submissions) List(ctx context.Context, clubID, roundID int64) ([]domain
 		}
 		out = append(out, sub)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Fetch extra links
+	if len(out) > 0 {
+		linkRows, err := s.db.QueryContext(ctx,
+			`SELECT submission_id, service, url FROM submission_links
+			  WHERE submission_id IN (SELECT id FROM submissions WHERE round_id = ?)
+			  ORDER BY service`,
+			roundID)
+		if err == nil {
+			defer linkRows.Close()
+			linksBySub := make(map[int64][]domain.SubmissionLink)
+			for linkRows.Next() {
+				var l domain.SubmissionLink
+				if err := linkRows.Scan(&l.SubmissionID, &l.Service, &l.URL); err == nil {
+					linksBySub[l.SubmissionID] = append(linksBySub[l.SubmissionID], l)
+				}
+			}
+			for i, sub := range out {
+				if links, ok := linksBySub[sub.ID]; ok {
+					out[i].ExtraLinks = links
+				}
+			}
+		}
+	}
+
+	return out, nil
 }
 
 // Delete removes a submission. Only an admin can invoke the corresponding route.

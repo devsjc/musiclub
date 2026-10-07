@@ -32,6 +32,17 @@ type Song struct {
 	Artist, Title string
 	URL           string
 	Note          string
+	LinkSource    string // "manual" or "matched"
+	URLService    string
+	ExternalID    string
+}
+
+// SuggestLinks returns candidate listening links for an artist and title.
+func (s *Service) SuggestLinks(ctx context.Context, artist, title string) ([]linkresolver.Match, error) {
+	if s.resolver == nil {
+		return nil, nil
+	}
+	return s.resolver.Candidates(ctx, artist, title)
 }
 
 // SubmitSong saves the player's song for the round.
@@ -53,14 +64,47 @@ func (s *Service) SubmitSong(ctx context.Context, clubID, roundID, playerID int6
 	if key == "" {
 		return domain.Submission{}, ErrSongUnreadable
 	}
-	url, service, err := linkresolver.CleanManualURL(song.URL)
-	if err != nil {
-		return domain.Submission{}, err
+
+	var finalURL, service, source, externalID string
+	if song.LinkSource == "matched" {
+		cleanedURL, detectedService, err := linkresolver.CleanManualURL(song.URL)
+		if err != nil {
+			return domain.Submission{}, err
+		}
+		finalURL = cleanedURL
+		service = song.URLService
+		if service == "" {
+			service = detectedService
+		}
+		source = "matched"
+		externalID = song.ExternalID
+	} else {
+		// Clean the manual URL
+		var err error
+		finalURL, service, err = linkresolver.CleanManualURL(song.URL)
+		if err != nil {
+			return domain.Submission{}, err
+		}
+		source = "manual"
 	}
 
-	return s.subs.Create(ctx, clubID, roundID, playerID, store.Song{
-		Artist: artist, Title: title, URL: url, URLService: service, LinkSource: "manual", Note: note, SongKey: key,
+	sub, err := s.subs.Create(ctx, clubID, roundID, playerID, store.Song{
+		Artist: artist, Title: title, URL: finalURL, URLService: service, LinkSource: source, ExternalID: externalID, Note: note, SongKey: key,
 	}, s.now())
+	if err != nil {
+		return sub, err
+	}
+
+	// Enrich asynchronously if a resolver is configured
+	if s.resolver != nil {
+		go func() {
+			// Using a background context because the request context will be cancelled
+			// when the HTTP handler returns.
+			_ = s.resolver.Enrich(context.Background(), sub.ID, sub.Artist, sub.Title)
+		}()
+	}
+
+	return sub, nil
 }
 
 // DeleteSubmission removes a submission by ID.

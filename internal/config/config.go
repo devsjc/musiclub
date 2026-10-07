@@ -10,20 +10,34 @@ import (
 )
 
 type Config struct {
-	Port         string
-	DBPath       string
-	CookieSecret string
-	Location     *time.Location // deadlines are interpreted in this zone
+	Port                string
+	DBPath              string
+	CookieSecret        string
+	Location            *time.Location // deadlines are interpreted in this zone
+	YouTubeAPIKey       string
+	SpotifyClientID     string
+	SpotifyClientSecret string
+	LinkCacheTTL        time.Duration
 }
 
 // Load reads configuration from the environment. It does not require
 // COOKIE_SECRET, since one-off commands such as `club add` don't use it;
 // call RequireSecret before starting the server.
 func Load() (Config, error) {
+	ttlStr := getenv("LINK_CACHE_TTL", "168h") // default 7 days
+	ttl, err := time.ParseDuration(ttlStr)
+	if err != nil {
+		return Config{}, fmt.Errorf("LINK_CACHE_TTL %q: %w", ttlStr, err)
+	}
+
 	cfg := Config{
-		Port:         getenv("PORT", "8080"),
-		DBPath:       getenv("DB_PATH", "/data/club.db"),
-		CookieSecret: os.Getenv("COOKIE_SECRET"),
+		Port:                getenv("PORT", "8080"),
+		DBPath:              getenv("DB_PATH", "/data/club.db"),
+		CookieSecret:        os.Getenv("COOKIE_SECRET"),
+		YouTubeAPIKey:       os.Getenv("YOUTUBE_API_KEY"),
+		SpotifyClientID:     os.Getenv("SPOTIFY_CLIENT_ID"),
+		SpotifyClientSecret: os.Getenv("SPOTIFY_CLIENT_SECRET"),
+		LinkCacheTTL:        ttl,
 	}
 
 	if _, err := strconv.ParseUint(cfg.Port, 10, 16); err != nil {

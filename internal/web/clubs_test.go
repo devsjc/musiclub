@@ -36,7 +36,7 @@ func newEnv(t *testing.T) *env {
 	return &env{
 		t:           t,
 		db:          d,
-		h:           NewServer(d, "test-secret", time.UTC).Handler(),
+		h:           NewServer(d, "test-secret", time.UTC, nil).Handler(),
 		clubs:       store.NewClubs(d),
 		players:     store.NewPlayers(d),
 		rounds:      store.NewRounds(d),

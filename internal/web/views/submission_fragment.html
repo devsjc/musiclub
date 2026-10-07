@@ -1,0 +1,60 @@
+{{define "submission-candidates"}}
+{{with .Data}}
+<form method="post" action="/c/{{$.Club.Slug}}/rounds/{{.Round.Month}}/submission" class="mt-4">
+    <input type="hidden" name="note" value="{{.Note}}">
+    <input type="hidden" name="link_source" value="matched">
+
+    {{if .Matches}}
+    <h3>Select the right match</h3>
+    <div class="candidates">
+        {{range $index, $m := .Matches}}
+        <label class="candidate-card" style="display: flex; gap: 1rem; align-items: center; margin-bottom: 0.75rem; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px; cursor: pointer;">
+            <input type="radio" name="candidate_index" value="{{$index}}" required {{if eq $index 0}}checked{{end}}>
+            <input type="hidden" name="match_{{$index}}_url" value="{{$m.URL}}">
+            <input type="hidden" name="match_{{$index}}_service" value="{{$m.Service}}">
+            <input type="hidden" name="match_{{$index}}_extid" value="{{$m.ExternalID}}">
+            <input type="hidden" name="match_{{$index}}_artist" value="{{$m.Artist}}">
+            <input type="hidden" name="match_{{$index}}_title" value="{{$m.Title}}">
+            {{if $m.ThumbURL}}<img src="{{$m.ThumbURL}}" alt="Thumbnail" width="50" height="50" style="object-fit: cover; border-radius: 4px;">{{end}}
+            <div>
+                <strong>{{$m.Artist}} — {{$m.Title}}</strong><br>
+                {{if $m.Album}}<span class="muted">{{$m.Album}}</span><br>{{end}}
+                <a href="{{$m.URL}}" target="_blank" rel="noopener noreferrer nofollow" onclick="event.stopPropagation()">Preview link</a>
+            </div>
+        </label>
+        {{end}}
+    </div>
+    
+    <div style="margin-top: 1rem;">
+        <button type="submit">Confirm song</button>
+        <span class="muted" style="margin: 0 0.5rem;">or</span>
+        <button type="button" class="secondary" hx-get="/c/{{$.Club.Slug}}/rounds/{{.Round.Month}}/submission/manual-url" 
+            hx-include="[name='note']" hx-target="#submission-step2" hx-swap="innerHTML">
+            None of these (paste my own link)
+        </button>
+    </div>
+    {{else}}
+    <p class="muted">Couldn't find matches. Paste your listening link below:</p>
+    <input type="hidden" name="artist" value="{{.Artist}}">
+    <input type="hidden" name="title" value="{{.Title}}">
+    <input type="hidden" name="link_source" value="manual">
+    <p><input type="url" name="url" placeholder="Link to listen (Spotify, YouTube, Bandcamp, ...)" maxlength="2000" required autofocus></p>
+    <button type="submit">Submit song</button>
+    {{end}}
+</form>
+{{end}}
+{{end}}
+
+{{define "submission-manual-url"}}
+{{with .Data}}
+<form method="post" action="/c/{{$.Club.Slug}}/rounds/{{.Round.Month}}/submission" class="mt-4">
+    <input type="hidden" name="artist" value="{{.Artist}}">
+    <input type="hidden" name="title" value="{{.Title}}">
+    <input type="hidden" name="note" value="{{.Note}}">
+    <input type="hidden" name="link_source" value="manual">
+    
+    <p><input type="url" name="url" placeholder="Link to listen (Spotify, YouTube, Bandcamp, ...)" maxlength="2000" required autofocus></p>
+    <button type="submit">Submit song</button>
+</form>
+{{end}}
+{{end}}

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"musiclub/internal/linkresolver"
 	"musiclub/internal/rounds"
 	"musiclub/internal/stats"
 	"musiclub/internal/store"
@@ -28,7 +29,7 @@ type Server struct {
 	mux         *http.ServeMux
 }
 
-func NewServer(db *sql.DB, cookieSecret string, loc *time.Location) *Server {
+func NewServer(db *sql.DB, cookieSecret string, loc *time.Location, resolver *linkresolver.Resolver) *Server {
 	s := &Server{
 		db:          db,
 		clubs:       store.NewClubs(db),
@@ -36,7 +37,7 @@ func NewServer(db *sql.DB, cookieSecret string, loc *time.Location) *Server {
 		rounds:      store.NewRounds(db),
 		submissions: store.NewSubmissions(db),
 		ballots:     store.NewBallots(db),
-		roundSvc:    rounds.New(db),
+		roundSvc:    rounds.New(db, resolver),
 		stats:       stats.NewStore(db),
 		loc:         loc,
 		sessions:    sessions{secret: []byte(cookieSecret)},
@@ -58,6 +59,8 @@ func NewServer(db *sql.DB, cookieSecret string, loc *time.Location) *Server {
 	s.mux.Handle("GET /c/{club}/stats/players/{id}", s.clubRoute(s.handlePlayerStats))
 	s.mux.Handle("GET /c/{club}/rounds/{month}/ballot-guesses", s.clubRoute(s.handleBallotGuesses))
 	s.mux.Handle("POST /c/{club}/rounds/{month}/theme", s.clubRoute(s.handleSetTheme))
+	s.mux.Handle("POST /c/{club}/rounds/{month}/submission/search", s.clubRoute(s.handleSubmissionSearch))
+	s.mux.Handle("GET /c/{club}/rounds/{month}/submission/manual-url", s.clubRoute(s.handleSubmissionManualURL))
 	s.mux.Handle("POST /c/{club}/rounds/{month}/submission", s.clubRoute(s.handleSubmission))
 	s.mux.Handle("POST /c/{club}/rounds/{month}/ballot", s.clubRoute(s.handleBallot))
 

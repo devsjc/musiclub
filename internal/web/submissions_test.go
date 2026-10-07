@@ -55,7 +55,7 @@ func TestSubmissionFlow(t *testing.T) {
 	// Players see the form and a checklist with nobody ticked.
 	body = e.do("GET", page, &sam, c, nil).Body.String()
 	require.Contains(t, body, `name="artist"`)
-	require.Contains(t, body, "Submit song")
+	require.Contains(t, body, "Find song")
 	require.NotContains(t, body, "✓")
 
 	// A good submission is saved and ticks the submitter off, by name only.
@@ -76,6 +76,54 @@ func TestSubmissionFlow(t *testing.T) {
 	rec = post(&sam, songValues("Queen", "Under Pressure", "https://example.com/y"))
 	wantStatus(t, rec, http.StatusConflict)
 	require.Contains(t, rec.Body.String(), "You have already submitted")
+}
+
+func TestSubmissionMatchingFlow(t *testing.T) {
+	e := newEnv(t)
+	c, sam, _ := submittingClub(t, e, "friends")
+	page := "/c/friends/rounds/2026-03"
+
+	// 1. Search endpoint (unconfigured provider degrades gracefully to manual URL input)
+	recSearch := e.do("POST", page+"/submission/search", &sam, c, url.Values{
+		"artist": {"Queen"}, "title": {"Radio Ga Ga"}, "note": {"Cool note"},
+	})
+	require.Equal(t, http.StatusOK, recSearch.Code)
+	bodySearch := recSearch.Body.String()
+	require.Contains(t, bodySearch, "Couldn't find matches")
+	require.Contains(t, bodySearch, `name="url"`)
+
+	// 2. Manual URL endpoint
+	recManual := e.do("GET", page+"/submission/manual-url", &sam, c, url.Values{
+		"artist": {"Queen"}, "title": {"Radio Ga Ga"}, "note": {"Cool note"},
+	})
+	require.Equal(t, http.StatusOK, recManual.Code)
+	bodyManual := recManual.Body.String()
+	require.Contains(t, bodyManual, `name="url"`)
+
+	// 3. Submitting with matched candidate stores canonical metadata and link_source = matched
+	recSubmit := e.do("POST", page+"/submission", &sam, c, url.Values{
+		"artist":          {"typed queen"},
+		"title":           {"typed radio ga ga"},
+		"link_source":     {"matched"},
+		"candidate_index": {"0"},
+		"match_0_url":     {"https://music.youtube.com/watch?v=vid123"},
+		"match_0_service": {"youtube_music"},
+		"match_0_extid":   {"vid123"},
+		"match_0_artist":  {"Queen"},
+		"match_0_title":   {"Radio Ga Ga"},
+	})
+	wantStatus(t, recSubmit, http.StatusSeeOther)
+
+	round, err := e.rounds.ByMonth(context.Background(), c.ID, "2026-03")
+	require.NoError(t, err)
+	sub, err := e.submissions.ByPlayer(context.Background(), c.ID, round.ID, sam.ID)
+	require.NoError(t, err)
+	require.Equal(t, "Queen", sub.Artist)
+	require.Equal(t, "Radio Ga Ga", sub.Title)
+	require.Equal(t, "https://music.youtube.com/watch?v=vid123", sub.URL)
+	require.Equal(t, "youtube_music", sub.URLService)
+	require.Equal(t, "matched", sub.LinkSource)
+	require.Equal(t, "vid123", sub.ExternalID)
 }
 
 func TestAdminDeleteSubmission(t *testing.T) {

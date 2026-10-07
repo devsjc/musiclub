@@ -22,6 +22,7 @@ import (
 
 	"musiclub/internal/config"
 	"musiclub/internal/db"
+	"musiclub/internal/linkresolver"
 	"musiclub/internal/rounds"
 	"musiclub/internal/scheduler"
 	"musiclub/internal/store"
@@ -72,16 +73,28 @@ func serve(cfg config.Config) error {
 	}
 	defer database.Close()
 
+	var ytProvider linkresolver.Provider
+	if cfg.YouTubeAPIKey != "" {
+		ytProvider = linkresolver.NewYouTubeProvider(cfg.YouTubeAPIKey)
+	}
+	var extras []linkresolver.Provider
+	if cfg.SpotifyClientID != "" && cfg.SpotifyClientSecret != "" {
+		extras = append(extras, linkresolver.NewSpotifyProvider(cfg.SpotifyClientID, cfg.SpotifyClientSecret))
+	}
+
+	linkStore := store.NewLinks(database)
+	resolver := linkresolver.NewResolver(linkStore, cfg.LinkCacheTTL, ytProvider, extras...)
+
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           web.NewServer(database, cfg.CookieSecret, cfg.Location).Handler(),
+		Handler:           web.NewServer(database, cfg.CookieSecret, cfg.Location, resolver).Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	svc := rounds.New(database)
+	svc := rounds.New(database, resolver)
 	go scheduler.Run(ctx, svc, 10*time.Minute)
 
 	errc := make(chan error, 1)

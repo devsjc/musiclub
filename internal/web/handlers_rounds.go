@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"time"
@@ -218,6 +219,59 @@ func (s *Server) submitterList(ctx context.Context, round domain.Round) ([]submi
 	return out, nil
 }
 
+func (s *Server) handleSubmissionSearch(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	round, ok := s.roundByMonth(w, r)
+	if !ok {
+		return
+	}
+
+	club := clubFrom(ctx)
+
+	artist := r.FormValue("artist")
+	title := r.FormValue("title")
+	note := r.FormValue("note")
+
+	matches, err := s.roundSvc.SuggestLinks(ctx, artist, title)
+	if err != nil {
+		slog.Error("provider search failed", "error", err)
+	}
+
+	data := struct {
+		ClubSlug string
+		Round    domain.Round
+		Artist   string
+		Title    string
+		Note     string
+		Matches  []linkresolver.Match
+	}{ClubSlug: club.Slug, Round: round, Artist: artist, Title: title, Note: note, Matches: matches}
+
+	s.renderFragment(w, r, http.StatusOK, "submission-candidates", page{Data: data})
+}
+
+func (s *Server) handleSubmissionManualURL(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	round, ok := s.roundByMonth(w, r)
+	if !ok {
+		return
+	}
+	club := clubFrom(ctx)
+
+	artist := r.FormValue("artist")
+	title := r.FormValue("title")
+	note := r.FormValue("note")
+
+	data := struct {
+		ClubSlug string
+		Round    domain.Round
+		Artist   string
+		Title    string
+		Note     string
+	}{ClubSlug: club.Slug, Round: round, Artist: artist, Title: title, Note: note}
+
+	s.renderFragment(w, r, http.StatusOK, "submission-manual-url", page{Data: data})
+}
+
 // handleSubmission saves the current player's song for the round.
 func (s *Server) handleSubmission(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -231,9 +285,47 @@ func (s *Server) handleSubmission(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	form := songForm{Artist: r.FormValue("artist"), Title: r.FormValue("title"), URL: r.FormValue("url"), Note: r.FormValue("note")}
-	_, err := s.roundSvc.SubmitSong(ctx, round.ClubID, round.ID, player.ID,
-		rounds.Song{Artist: form.Artist, Title: form.Title, URL: form.URL, Note: form.Note})
+	// Read fields from either candidate matching or manual URL
+	linkSource := r.FormValue("link_source")
+	artist := r.FormValue("artist")
+	title := r.FormValue("title")
+	url := r.FormValue("url")
+	note := r.FormValue("note")
+	urlService := r.FormValue("url_service")
+	externalID := r.FormValue("external_id")
+
+	if linkSource == "matched" {
+		idx := r.FormValue("candidate_index")
+		if idx != "" {
+			url = r.FormValue("match_" + idx + "_url")
+			urlService = r.FormValue("match_" + idx + "_service")
+			externalID = r.FormValue("match_" + idx + "_extid")
+			matchArtist := r.FormValue("match_" + idx + "_artist")
+			matchTitle := r.FormValue("match_" + idx + "_title")
+			if matchArtist != "" {
+				artist = matchArtist
+			}
+			if matchTitle != "" {
+				title = matchTitle
+			}
+		}
+	} else if linkSource == "" {
+		linkSource = "manual"
+	}
+
+	song := rounds.Song{
+		Artist:     artist,
+		Title:      title,
+		URL:        url,
+		Note:       note,
+		LinkSource: linkSource,
+		URLService: urlService,
+		ExternalID: externalID,
+	}
+
+	form := songForm{Artist: artist, Title: title, URL: url, Note: note}
+
+	_, err := s.roundSvc.SubmitSong(ctx, round.ClubID, round.ID, player.ID, song)
 	switch {
 	case err == nil:
 		http.Redirect(w, r, clubPath(ctx, "/rounds/"+round.Month), http.StatusSeeOther)

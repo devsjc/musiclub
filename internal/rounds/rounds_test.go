@@ -25,7 +25,7 @@ func newService(t *testing.T) (*Service, domain.Club, domain.Player, *sql.DB) {
 	require.NoError(t, err)
 	sam, err := store.NewPlayers(d).Create(ctx, club.ID, "sam", true)
 	require.NoError(t, err)
-	s := New(d)
+	s := New(d, nil)
 	s.now = func() time.Time { return time.Date(2026, 3, 1, 9, 0, 0, 0, time.UTC) }
 	return s, club, sam, d
 }

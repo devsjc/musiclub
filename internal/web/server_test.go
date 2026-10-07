@@ -15,7 +15,7 @@ func TestHealthz(t *testing.T) {
 	d, err := db.Open(":memory:")
 	require.NoError(t, err)
 	defer d.Close()
-	h := NewServer(d, "test-secret", time.UTC).Handler()
+	h := NewServer(d, "test-secret", time.UTC, nil).Handler()
 
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest("GET", "/healthz", nil))

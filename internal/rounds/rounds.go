@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"musiclub/internal/domain"
+	"musiclub/internal/linkresolver"
 	"musiclub/internal/store"
 )
 
@@ -29,24 +30,26 @@ var (
 )
 
 type Service struct {
-	rounds  *store.Rounds
-	subs    *store.Submissions
-	ballots *store.Ballots
-	quotes  *store.Quotes
-	now     func() time.Time
-	intn    func(n int) int
-	shuffle func(n int, swap func(i, j int))
+	rounds   *store.Rounds
+	subs     *store.Submissions
+	ballots  *store.Ballots
+	quotes   *store.Quotes
+	resolver *linkresolver.Resolver
+	now      func() time.Time
+	intn     func(n int) int
+	shuffle  func(n int, swap func(i, j int))
 }
 
-func New(db *sql.DB) *Service {
+func New(db *sql.DB, resolver *linkresolver.Resolver) *Service {
 	return &Service{
-		rounds:  store.NewRounds(db),
-		subs:    store.NewSubmissions(db),
-		ballots: store.NewBallots(db),
-		quotes:  store.NewQuotes(db),
-		now:     time.Now,
-		intn:    rand.IntN,
-		shuffle: rand.Shuffle,
+		rounds:   store.NewRounds(db),
+		subs:     store.NewSubmissions(db),
+		ballots:  store.NewBallots(db),
+		quotes:   store.NewQuotes(db),
+		resolver: resolver,
+		now:      time.Now,
+		intn:     rand.IntN,
+		shuffle:  rand.Shuffle,
 	}
 }
 

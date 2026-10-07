@@ -21,13 +21,27 @@
   {{if $.Player}}
     <h2>Your song</h2>
     {{if and .SubmitOpen (not .Form.Saved)}}
-    <form method="post" action="/c/{{$.Club.Slug}}/rounds/{{.Month}}/submission">
-      <p><input type="text" name="artist" placeholder="Artist" value="{{.Form.Artist}}" maxlength="200" required></p>
-      <p><input type="text" name="title" placeholder="Title" value="{{.Form.Title}}" maxlength="200" required></p>
-      <p><input type="url" name="url" placeholder="Link to listen (Spotify, YouTube, Bandcamp, ...)" value="{{.Form.URL}}" maxlength="2000" required></p>
-      <p><textarea name="note" placeholder="Note (optional)" maxlength="500" rows="2">{{.Form.Note}}</textarea></p>
-      <button>Submit song</button>
-    </form>
+    <div id="submission-form">
+      <form hx-post="/c/{{$.Club.Slug}}/rounds/{{.Month}}/submission/search" hx-target="#submission-step2" hx-swap="innerHTML">
+        <p><input type="text" name="artist" placeholder="Artist" value="{{.Form.Artist}}" maxlength="200" required></p>
+        <p><input type="text" name="title" placeholder="Title" value="{{.Form.Title}}" maxlength="200" required></p>
+        <p><textarea name="note" placeholder="Note (optional)" maxlength="500" rows="2">{{.Form.Note}}</textarea></p>
+        <button type="submit">Find song</button>
+        <span class="htmx-indicator">Searching...</span>
+      </form>
+      <div id="submission-step2">
+        {{if .Form.URL}}
+        <form method="post" action="/c/{{$.Club.Slug}}/rounds/{{.Month}}/submission" class="mt-4">
+            <input type="hidden" name="artist" value="{{.Form.Artist}}">
+            <input type="hidden" name="title" value="{{.Form.Title}}">
+            <input type="hidden" name="note" value="{{.Form.Note}}">
+            <input type="hidden" name="link_source" value="manual">
+            <p><input type="url" name="url" placeholder="Link to listen" value="{{.Form.URL}}" maxlength="2000" required></p>
+            <button type="submit">Submit song</button>
+        </form>
+        {{end}}
+      </div>
+    </div>
     {{else if .Form.Saved}}
     <p>{{.Form.Artist}} — {{.Form.Title}}</p>
     {{else}}
@@ -51,6 +65,9 @@
       <strong>{{.Artist}} — {{.Title}}</strong>
       {{if .Note}}<br><span class="muted">"{{.Note}}"</span>{{end}}
       <br><a href="{{.URL}}" target="_blank" rel="noopener noreferrer nofollow">Listen</a>
+      {{range .ExtraLinks}}
+      <a href="{{.URL}}" target="_blank" rel="noopener noreferrer nofollow" title="Listen on {{.Service}}"><small>[{{.Service}}]</small></a>
+      {{end}}
     </li>
     {{end}}
   </ul>

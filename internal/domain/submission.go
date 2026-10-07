@@ -17,4 +17,5 @@ type Submission struct {
 	SongKey     string // normalised duplicate key (DESIGN.md §5.3)
 	SubmittedAt time.Time
 	Position    *int // shuffled display order, set when voting opens
+	ExtraLinks  []SubmissionLink
 }
